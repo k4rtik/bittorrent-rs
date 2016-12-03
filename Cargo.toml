@@ -1,0 +1,6 @@
+[package]
+name = "bittorrent-rs"
+version = "0.1.0"
+authors = ["Kartik Singhal <kartiksinghal@gmail.com>", "Sumukha TV <tvsumukha@gmail.com>"]
+
+[dependencies]

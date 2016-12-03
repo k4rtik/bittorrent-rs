@@ -1,0 +1,4 @@
+[root]
+name = "bittorrent-rs"
+version = "0.1.0"
+

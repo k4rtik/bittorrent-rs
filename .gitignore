@@ -4,6 +4,6 @@
 
 # Custom
 *~
-history.txt
+.rustyline.history
 *.swp
 *.bk

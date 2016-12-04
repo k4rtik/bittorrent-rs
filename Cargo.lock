@@ -9,6 +9,7 @@ dependencies = [
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_env_logger 0.1.0 (git+https://github.com/seanmonstar/pretty-env-logger)",
  "rustyline 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

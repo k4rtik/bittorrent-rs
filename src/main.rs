@@ -5,14 +5,14 @@ extern crate log;
 extern crate pretty_env_logger;
 extern crate rustyline;
 extern crate hyper;
-// extern crate url;
+extern crate url;
 
 use bip_metainfo::MetainfoFile;
 use chrono::{TimeZone, UTC};
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
-use hyper::{Url, Client};
-// use url::{Url, ParseError};
+use hyper::Client;
+use url::Url;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -55,20 +55,22 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
     let client = Client::new();
     let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
-    url.query_pairs_mut().append_pair("info_hash", str::from_utf8(metainfo_file.info_hash().as_ref()).unwrap());
-                          /*metainfo_file.info_hash(),
-                          "&peer_id=",
-                          peer_id,
-                          "&port=",
-                          port,
-                          "&uploaded=0",
-                          "&downloaded=0",
-                          "&left=",
-                          metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length()),
-                          "&compact=0",
-                          "&event=started");*/
+    let info_hash = metainfo_file.info_hash();
+    let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
+    url.query_pairs_mut().append_pair("info_hash", &info_hash_str);
+    // metainfo_file.info_hash(),
+    // "&peer_id=",
+    // peer_id,
+    // "&port=",
+    // port,
+    // "&uploaded=0",
+    // "&downloaded=0",
+    // "&left=",
+    // metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length()),
+    // "&compact=0",
+    // "&event=started");
     debug!("URL {:?}", url);
-    //let res = client.get(url);
+    // let res = client.get(url);
     //    debug!("Tracker resp {:?}", res);
     Ok(())
 }

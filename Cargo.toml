@@ -1,16 +1,16 @@
 [package]
+authors = ["Kartik Singhal <kartiksinghal@gmail.com>", "Sumukha TV <tvsumukha@gmail.com>"]
 name = "btclient"
 version = "0.1.0"
-authors = ["Kartik Singhal <kartiksinghal@gmail.com>", "Sumukha TV <tvsumukha@gmail.com>"]
 
 [dependencies]
 bip_bencode = "*"
 bip_metainfo = "*"
 chrono = "*"
+hyper = "*"
 log = "*"
 rustyline = "*"
-hyper = "*"
+url = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"
-

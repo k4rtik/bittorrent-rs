@@ -9,6 +9,8 @@ bip_metainfo = "*"
 chrono = "*"
 log = "*"
 rustyline = "*"
+hyper = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"
+

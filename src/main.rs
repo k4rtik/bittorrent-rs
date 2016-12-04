@@ -4,14 +4,20 @@ extern crate chrono;
 extern crate log;
 extern crate pretty_env_logger;
 extern crate rustyline;
+extern crate hyper;
+// extern crate url;
 
 use bip_metainfo::MetainfoFile;
 use chrono::{TimeZone, UTC};
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
+use hyper::{Url, Client};
+// use url::{Url, ParseError};
 
 use std::io::prelude::*;
 use std::fs::File;
+use std::str;
+use std::string::String;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 
@@ -45,9 +51,26 @@ fn print_metainfo_overview(bytes: &[u8]) {
              info.files().fold(0, |acc, nex| acc + nex.length()));
 }
 
-fn connect(tracker: &str) {
-    debug!("connecting to tracker: {:?}", tracker);
-
+fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> Result<(), String> {
+    debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
+    let client = Client::new();
+    let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
+    url.query_pairs_mut().append_pair("info_hash", str::from_utf8(metainfo_file.info_hash().as_ref()).unwrap());
+                          /*metainfo_file.info_hash(),
+                          "&peer_id=",
+                          peer_id,
+                          "&port=",
+                          port,
+                          "&uploaded=0",
+                          "&downloaded=0",
+                          "&left=",
+                          metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length()),
+                          "&compact=0",
+                          "&event=started");*/
+    debug!("URL {:?}", url);
+    //let res = client.get(url);
+    //    debug!("Tracker resp {:?}", res);
+    Ok(())
 }
 
 fn main() {
@@ -78,10 +101,10 @@ fn main() {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
                                     print_metainfo_overview(&bytes);
-                                    connect(MetainfoFile::from_bytes(&bytes)
-                                        .unwrap()
-                                        .main_tracker()
-                                        .unwrap());
+                                    connect_to_tracker(MetainfoFile::from_bytes(&bytes).unwrap(),
+                                                       "myid",
+                                                       6882 /* .unwrap()
+                                                             * .main_tracker() */);
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

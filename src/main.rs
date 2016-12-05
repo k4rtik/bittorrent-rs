@@ -1,24 +1,24 @@
-extern crate bip_metainfo;
-extern crate chrono;
 #[macro_use]
 extern crate log;
+extern crate bip_bencode;
+extern crate bip_metainfo;
+extern crate chrono;
+extern crate hyper;
 extern crate pretty_env_logger;
 extern crate rustyline;
-extern crate hyper;
 extern crate url;
-extern crate bip_bencode;
 
+use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
 use chrono::{TimeZone, UTC};
+use hyper::Client;
+use hyper::header::Connection;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
-use hyper::Client;
 use url::Url;
-use hyper::header::Connection;
-use bip_bencode::Bencode;
 
-use std::io::prelude::*;
 use std::fs::File;
+use std::io::prelude::*;
 use std::str;
 use std::string::String;
 

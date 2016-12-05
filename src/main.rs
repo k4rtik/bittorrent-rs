@@ -69,7 +69,8 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
         .append_pair("downloaded", "0")
         .append_pair("left", &(total_len.to_string()))
         .append_pair("compact", "1")
-        .append_pair("event", "started");
+        .append_pair("event", "started")
+        .append_pair("supportcrypto", "0");
     debug!("URL {:?}", url);
 
     let client = Client::new();
@@ -77,9 +78,10 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     let mut buffer = Vec::new();
     res.read_to_end(&mut buffer);
     debug!("Resp {:?}", res);
-    debug!("buffer {:?}", buffer);
-    // let bencode = try!(Bencode::decode(&buffer));
-    // debug!("{:?}", bencode);
+    let bencode = Bencode::decode(&buffer).unwrap();
+    debug!("{:?}", bencode);
+    // debug!("{:?}", Bencode::decode((bencode.dict().unwrap().lookup("peers")
+    //               .unwrap().bytes().unwrap())).unwrap());
 
     Ok(())
 }

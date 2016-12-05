@@ -56,26 +56,30 @@ fn print_metainfo_overview(bytes: &[u8]) {
 
 fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> Result<(), String> {
     debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
-    let client = Client::new();
-    let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
     let info_hash = metainfo_file.info_hash();
     let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
-    url.query_pairs_mut().append_pair("info_hash", &info_hash_str);
-    url.query_pairs_mut().append_pair("peer_id", "-TR2920-utffmgat89lc");
-    url.query_pairs_mut().append_pair("port", &(port.to_string()));
-    url.query_pairs_mut().append_pair("uploaded", "0");
-    url.query_pairs_mut().append_pair("downloaded", "0");
     let total_len = metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length());
-    url.query_pairs_mut().append_pair("left", &(total_len.to_string()));
-    url.query_pairs_mut().append_pair("compact", "1");
-    url.query_pairs_mut().append_pair("event", "started");
+
+    let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
+    url.query_pairs_mut()
+        .append_pair("info_hash", &info_hash_str)
+        .append_pair("peer_id", "-TR2920-utffmgat89lc")
+        .append_pair("port", &(port.to_string()))
+        .append_pair("uploaded", "0")
+        .append_pair("downloaded", "0")
+        .append_pair("left", &(total_len.to_string()))
+        .append_pair("compact", "1")
+        .append_pair("event", "started");
     debug!("URL {:?}", url);
+
+    let client = Client::new();
     let mut res = client.get(url).header(Connection::close()).send().unwrap();
     let mut buffer = Vec::new();
-    res.read(&mut buffer);
+    res.read_to_end(&mut buffer);
     debug!("Resp {:?}", res);
-    let bencode = Bencode::decode(&buffer).unwrap();
-    debug!("{:?}", bencode);
+    debug!("buffer {:?}", buffer);
+    // let bencode = try!(Bencode::decode(&buffer));
+    // debug!("{:?}", bencode);
 
     Ok(())
 }

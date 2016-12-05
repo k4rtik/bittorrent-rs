@@ -1,7 +1,11 @@
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate nom;
+
 extern crate bip_bencode;
 extern crate bip_metainfo;
+extern crate bip_utracker;
 extern crate chrono;
 extern crate hyper;
 extern crate pretty_env_logger;
@@ -10,9 +14,11 @@ extern crate url;
 
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
+use bip_utracker::contact::CompactPeersV4;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;
+use nom::IResult;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use url::Url;

@@ -6,6 +6,7 @@ extern crate pretty_env_logger;
 extern crate rustyline;
 extern crate hyper;
 extern crate url;
+extern crate bip_bencode;
 
 use bip_metainfo::MetainfoFile;
 use chrono::{TimeZone, UTC};
@@ -14,6 +15,7 @@ use rustyline::error::ReadlineError;
 use hyper::Client;
 use url::Url;
 use hyper::header::Connection;
+use bip_bencode::Bencode;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -68,8 +70,13 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     url.query_pairs_mut().append_pair("compact", "1");
     url.query_pairs_mut().append_pair("event", "started");
     debug!("URL {:?}", url);
-    let res = client.get(url).header(Connection::close()).send().unwrap();
+    let mut res = client.get(url).header(Connection::close()).send().unwrap();
+    let mut buffer = Vec::new();
+    res.read(&mut buffer);
     debug!("Resp {:?}", res);
+    let bencode = Bencode::decode(&buffer).unwrap();
+    debug!("{:?}", bencode);
+
     Ok(())
 }
 

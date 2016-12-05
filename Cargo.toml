@@ -14,3 +14,6 @@ url = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"
+
+[dependencies.bencode]
+git = "https://github.com/arjantop/rust-bencode.git"

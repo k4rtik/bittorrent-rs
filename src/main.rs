@@ -13,6 +13,7 @@ use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use hyper::Client;
 use url::Url;
+use hyper::header::Connection;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -58,20 +59,17 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     let info_hash = metainfo_file.info_hash();
     let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
     url.query_pairs_mut().append_pair("info_hash", &info_hash_str);
-    // metainfo_file.info_hash(),
-    // "&peer_id=",
-    // peer_id,
-    // "&port=",
-    // port,
-    // "&uploaded=0",
-    // "&downloaded=0",
-    // "&left=",
-    // metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length()),
-    // "&compact=0",
-    // "&event=started");
+    url.query_pairs_mut().append_pair("peer_id", "-TR2920-utffmgat89lc");
+    url.query_pairs_mut().append_pair("port", &(port.to_string()));
+    url.query_pairs_mut().append_pair("uploaded", "0");
+    url.query_pairs_mut().append_pair("downloaded", "0");
+    let total_len = metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length());
+    url.query_pairs_mut().append_pair("left", &(total_len.to_string()));
+    url.query_pairs_mut().append_pair("compact", "1");
+    url.query_pairs_mut().append_pair("event", "started");
     debug!("URL {:?}", url);
-    // let res = client.get(url);
-    //    debug!("Tracker resp {:?}", res);
+    let res = client.get(url).header(Connection::close()).send().unwrap();
+    debug!("Resp {:?}", res);
     Ok(())
 }
 

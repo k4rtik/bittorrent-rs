@@ -86,8 +86,17 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     debug!("Resp {:?}", res);
     let bencode = Bencode::decode(&buffer).unwrap();
     debug!("{:?}", bencode);
-    // debug!("{:?}", Bencode::decode((bencode.dict().unwrap().lookup("peers")
-    //               .unwrap().bytes().unwrap())).unwrap());
+    let (_, peers) = CompactPeersV4::from_bytes(bencode.dict()
+            .unwrap()
+            .lookup("peers")
+            .unwrap()
+            .bytes()
+            .unwrap())
+        .unwrap();
+    debug!("{:?}", peers);
+    for peer in peers.iter() {
+        debug!("{:?}", peer);
+    }
 
     Ok(())
 }

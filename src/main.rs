@@ -20,7 +20,6 @@ use bip_utracker::contact::CompactPeersV4;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;
-// use nom::IResult;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use url::Url;
@@ -74,7 +73,9 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
                       -> Result<(Vec<String>, String), String> {
     debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
     let info_hash = metainfo_file.info_hash();
+    // TODO figure can this conversion to url-encoded form be done safely?
     let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
+    // TODO this needs to be calculated based on what we have
     let total_len = metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length());
 
     let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
@@ -82,8 +83,11 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
         .append_pair("info_hash", &info_hash_str)
         .append_pair("peer_id", peer_id)
         .append_pair("port", &(port.to_string()))
+        // TODO parametrize this
         .append_pair("uploaded", "0")
+        // TODO parametrize this
         .append_pair("downloaded", "0")
+        // TODO see note on total_len above
         .append_pair("left", &(total_len.to_string()))
         .append_pair("compact", "1")
         .append_pair("event", "started")
@@ -93,7 +97,7 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
     let client = Client::new();
     let mut res = client.get(url).header(Connection::close()).send().unwrap();
     let mut buffer = Vec::new();
-    res.read_to_end(&mut buffer);
+    res.read_to_end(&mut buffer).unwrap();
     debug!("Resp {:?}", res);
     let bencode = Bencode::decode(&buffer).unwrap();
     debug!("{:?}", bencode);
@@ -182,9 +186,9 @@ fn main() {
                                     for peer_ip_port in result.0 {
                                         handshake_peer(&peer_ip_port,
                                                        &result.1,
-                                                       "-TR2920-utffmgat89lc");
+                                                       "-TR2920-utffmgat89lc")
+                                            .unwrap();
                                     }
-
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

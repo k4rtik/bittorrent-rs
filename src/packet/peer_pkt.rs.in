@@ -1,0 +1,17 @@
+use pnet_macros_support::types::*;
+
+#[packet]
+pub struct PeerHandshake {
+    pstrlen: u8,
+    #[length = "pstrlen"]
+    pstr: Vec<u8>,
+    #[length = "8"]
+    reserved: Vec<u8>,
+    #[length = "20"]
+    info_hash: Vec<u8>,
+    #[length = "20"]
+    peer_id: Vec<u8>,
+    #[payload]
+    #[length = "0"]
+    payload: Vec<u8>,
+}

@@ -2,6 +2,11 @@
 authors = ["Kartik Singhal <kartiksinghal@gmail.com>", "Sumukha TV <tvsumukha@gmail.com>"]
 name = "btclient"
 version = "0.1.0"
+build = "build.rs"
+
+[build-dependencies]
+syntex = "0.42.*"
+pnet_macros = "*"
 
 [dependencies]
 bip_bencode = "*"
@@ -13,6 +18,8 @@ log = "*"
 nom = "*"
 rustyline = "*"
 url = "*"
+pnet = "*"
+pnet_macros_support = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"

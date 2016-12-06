@@ -11,6 +11,8 @@ extern crate hyper;
 extern crate pretty_env_logger;
 extern crate rustyline;
 extern crate url;
+extern crate pnet;
+extern crate pnet_macros_support;
 
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
@@ -18,17 +20,23 @@ use bip_utracker::contact::CompactPeersV4;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;
-use nom::IResult;
+// use nom::IResult;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use url::Url;
+use pnet::packet::Packet;
+use packet::peer_pkt::MutablePeerHandshakePacket;
 
 use std::fs::File;
 use std::io::prelude::*;
 use std::str;
 use std::string::String;
+use std::net::TcpStream;
+
+mod packet;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
+const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
 
 /// Print general information about the torrent.
 fn print_metainfo_overview(bytes: &[u8]) {
@@ -60,7 +68,10 @@ fn print_metainfo_overview(bytes: &[u8]) {
              info.files().fold(0, |acc, nex| acc + nex.length()));
 }
 
-fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> Result<(), String> {
+fn connect_to_tracker(metainfo_file: MetainfoFile,
+                      peer_id: &str,
+                      port: u16)
+                      -> Result<(Vec<String>, String), String> {
     debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
     let info_hash = metainfo_file.info_hash();
     let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
@@ -69,7 +80,7 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
     let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
     url.query_pairs_mut()
         .append_pair("info_hash", &info_hash_str)
-        .append_pair("peer_id", "-TR2920-utffmgat89lc")
+        .append_pair("peer_id", peer_id)
         .append_pair("port", &(port.to_string()))
         .append_pair("uploaded", "0")
         .append_pair("downloaded", "0")
@@ -94,11 +105,43 @@ fn connect_to_tracker(metainfo_file: MetainfoFile, peer_id: &str, port: u16) -> 
             .unwrap())
         .unwrap();
     debug!("{:?}", peers);
+    let mut ip_ports: Vec<String> = Vec::new();
     for peer in peers.iter() {
         debug!("{:?}", peer);
+        ip_ports.push(peer.to_string());
+    }
+    Ok((ip_ports, info_hash_str.to_string()))
+}
+
+fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<(), String> {
+    let mut buf = vec![0u8; PEER_HANDSHAKE_STRUCT_SZ];
+    let mut ph = MutablePeerHandshakePacket::new(&mut buf).unwrap();
+    ph.set_pstrlen("BitTorrent protocol".len() as u8);
+    ph.set_pstr(&String::from("BitTorrent protocol").into_bytes());
+    ph.set_reserved(&[0; 8]);
+    ph.set_info_hash(info_hash.as_bytes());
+    ph.set_peer_id(peer_id.as_bytes());
+    debug!("Size of the peer handshake struct: {:?}", ph.packet().len());
+    match TcpStream::connect(peer_ip_port) {
+        Ok(mut stream) => {
+            debug!("Connection to peer {:?} successful!", peer_ip_port);
+            match stream.write(ph.packet()) {
+                Ok(_) => {
+                    debug!("Sending message successful!");
+                    Ok(())
+                }
+                Err(_) => {
+                    error!("Sending message failed!");
+                    Err("Sending message failed!".to_owned())
+                }
+            }
+        }
+        Err(e) => {
+            error!("Connection to peer {:?} failed! {:?}", peer_ip_port, e);
+            Err("Connection to peer failed!".to_owned())
+        }
     }
 
-    Ok(())
 }
 
 fn main() {
@@ -129,10 +172,19 @@ fn main() {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
                                     print_metainfo_overview(&bytes);
-                                    connect_to_tracker(MetainfoFile::from_bytes(&bytes).unwrap(),
-                                                       "myid",
-                                                       6882 /* .unwrap()
-                                                             * .main_tracker() */);
+                                    // TODO: generate peer ID
+                                    let result =
+                                        connect_to_tracker(MetainfoFile::from_bytes(&bytes)
+                                                               .unwrap(),
+                                                           "-TR2920-utffmgat89lc",
+                                                           6882)
+                                            .unwrap();
+                                    for peer_ip_port in result.0 {
+                                        handshake_peer(&peer_ip_port,
+                                                       &result.1,
+                                                       "-TR2920-utffmgat89lc");
+                                    }
+
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

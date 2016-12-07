@@ -15,6 +15,7 @@ extern crate pretty_env_logger;
 extern crate rustyline;
 extern crate url;
 
+mod btclient;
 mod packet;
 
 use bip_bencode::Bencode;

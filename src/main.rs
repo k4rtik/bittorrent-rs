@@ -184,7 +184,14 @@ fn main() {
                 let cmd = cmd.trim().split(' ').collect::<Vec<&str>>();
 
                 match cmd[0] {
-                    "parse" => {
+                    "help" | "h" => {
+                        println!("Commands:
+parse/p <torrent file path>      - show Metainfo File Overview
+connect/c <torrent file path>    - initiate connection to tracker, and handshake with peers
+showfiles/sf <torrent file path> - show files in the torrent
+help/h                           - show this help");
+                    }
+                    "parse" | "p" => {
                         if cmd.len() != 2 {
                             error!("usage: parse <torrent file>");
                         } else {
@@ -201,7 +208,7 @@ fn main() {
                             }
                         }
                     }
-                    "connect" => {
+                    "connect" | "c" => {
                         if cmd.len() != 2 {
                             error!("usage: connect <torrent file>");
                         } else {
@@ -224,7 +231,10 @@ fn main() {
                             }
                         }
                     }
-                    _ => {}
+                    "" => {}
+                    _ => {
+                        println!("invalid command, see \"help\"");
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) |

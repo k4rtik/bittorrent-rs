@@ -93,15 +93,15 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
         .append_pair("compact", "1")
         .append_pair("event", "started")
         .append_pair("supportcrypto", "0");
-    debug!("URL {:?}", url);
+    trace!("URL {:?}", url);
 
     let client = Client::new();
     let mut res = client.get(url).header(Connection::close()).send().unwrap();
     let mut buffer = Vec::new();
     res.read_to_end(&mut buffer).unwrap();
-    debug!("Resp {:?}", res);
+    debug!("{:?}", res);
     let bencode = Bencode::decode(&buffer).unwrap();
-    debug!("{:?}", bencode);
+    trace!("{:?}", bencode);
     let (_, peers) = CompactPeersV4::from_bytes(bencode.dict()
             .unwrap()
             .lookup("peers")
@@ -109,7 +109,7 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
             .bytes()
             .unwrap())
         .unwrap();
-    debug!("{:?}", peers);
+    trace!("{:?}", peers);
     let mut ip_ports: Vec<String> = Vec::new();
     for peer in peers.iter() {
         debug!("{:?}", peer);
@@ -126,7 +126,6 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
     ph.set_reserved(&[0; 8]);
     ph.set_info_hash(info_hash.as_bytes());
     ph.set_peer_id(peer_id.as_bytes());
-    debug!("Size of the peer handshake struct: {:?}", ph.packet().len());
     match TcpStream::connect(peer_ip_port) {
         Ok(mut stream) => {
             debug!("Connection to peer {:?} successful!", peer_ip_port);
@@ -146,7 +145,6 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
             Err("Connection to peer failed!".to_owned())
         }
     }
-
 }
 
 fn main() {

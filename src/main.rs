@@ -6,6 +6,7 @@ extern crate nom;
 extern crate bip_bencode;
 extern crate bip_metainfo;
 extern crate bip_utracker;
+extern crate bip_util;
 extern crate chrono;
 extern crate hyper;
 extern crate pnet;

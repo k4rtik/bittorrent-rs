@@ -1,25 +1,26 @@
 [package]
 authors = ["Kartik Singhal <kartiksinghal@gmail.com>", "Sumukha TV <tvsumukha@gmail.com>"]
+build = "build.rs"
 name = "btclient"
 version = "0.1.0"
-build = "build.rs"
 
 [build-dependencies]
-syntex = "0.42.*"
 pnet_macros = "*"
+syntex = "0.42.*"
 
 [dependencies]
 bip_bencode = "*"
 bip_metainfo = "*"
+bip_util = "*"
 bip_utracker = "*"
 chrono = "*"
 hyper = "*"
 log = "*"
 nom = "*"
-rustyline = "*"
-url = "*"
 pnet = "*"
 pnet_macros_support = "*"
+rustyline = "*"
+url = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"

@@ -33,6 +33,7 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 use std::str;
 use std::string::String;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
@@ -155,6 +156,11 @@ fn main() {
     if rl.load_history(HISTORY_FILE).is_err() {
         info!("No previous history!");
     }
+
+    let now = SystemTime::now();
+    let duration = now.duration_since(UNIX_EPOCH).unwrap();
+    let client_id = "-bittorrent-rs-".to_owned() + &format!("{}", duration.as_secs() % 100_000);
+
     loop {
         let readline = rl.readline("> ");
         match readline {
@@ -195,13 +201,11 @@ fn main() {
                                     let result =
                                         connect_to_tracker(MetainfoFile::from_bytes(&bytes)
                                                                .unwrap(),
-                                                           "-TR2920-utffmgat89lc",
+                                                           &client_id,
                                                            6882)
                                             .unwrap();
                                     for peer_ip_port in result.0 {
-                                        handshake_peer(&peer_ip_port,
-                                                       &result.1,
-                                                       "-TR2920-utffmgat89lc")
+                                        handshake_peer(&peer_ip_port, &result.1, &client_id)
                                             .unwrap();
                                     }
                                 }

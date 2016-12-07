@@ -139,27 +139,29 @@ fn peer_connections(peer_ip_ports: Vec<String>,
                     debug!("Communicating with peer {:?}", peer_ip_port_cl);
                     let mut buff = [0; PEER_HANDSHAKE_STRUCT_SZ];
                     match stream.read(&mut buff) {
-			Ok(_) => {
-				let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
-				let mut peer_msg_pkt  = MutablePeerMessagePacket::new(&mut buf).unwrap();
-				peer_msg_pkt.set_len(13);
-				peer_msg_pkt.set_id(6);
-				//TODO fill length properly
-				let index_begin_length = vec![0, 0, 10];
-				peer_msg_pkt.set_payload(&index_begin_length);
-				match stream.write(peer_msg_pkt.packet()) {
-					Ok(_) => {
-						let mut buf_read = vec![0; 2048];
-						match stream.read(&mut buf_read) {
-							Ok(bytes_read) => {debug!("Bytes read: {:?}", bytes_read);},
-							Err(e) => error!("Read failed! {:?}", e),
-						}
-					},
-					Err(e) => error!("Write to stream failed! {:?}", e),
-				}
-			},
-			Err(e) => error!("Reading from the stream failed! {:?}", e),
-			}
+                        Ok(_) => {
+                            let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
+                            let mut peer_msg_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
+                            peer_msg_pkt.set_len(13);
+                            peer_msg_pkt.set_id(6);
+                            // TODO fill length properly
+                            let index_begin_length = vec![0, 0, 10];
+                            peer_msg_pkt.set_payload(&index_begin_length);
+                            match stream.write(peer_msg_pkt.packet()) {
+                                Ok(_) => {
+                                    let mut buf_read = vec![0; 2048];
+                                    match stream.read(&mut buf_read) {
+                                        Ok(bytes_read) => {
+                                            debug!("Bytes read: {:?}", bytes_read);
+                                        }
+                                        Err(e) => error!("Read failed! {:?}", e),
+                                    }
+                                }
+                                Err(e) => error!("Write to stream failed! {:?}", e),
+                            }
+                        }
+                        Err(e) => error!("Reading from the stream failed! {:?}", e),
+                    }
                 }
                 Err(_) => {
                     error!("Closing thread with peer {:?}", peer_ip_port_cl);

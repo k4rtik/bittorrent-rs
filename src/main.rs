@@ -22,7 +22,7 @@ use bip_utracker::contact::CompactPeersV4;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;
-use packet::peer_pkt::MutablePeerHandshakePacket;
+use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
 use pnet::packet::Packet;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
@@ -38,21 +38,7 @@ use std::thread;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
-
-/// Print file list from the torrent.
-fn print_files(bytes: &[u8]) {
-    let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
-    let info = metainfo.info();
-
-    println!("File List:");
-    println!("Size (bytes)\tPath");
-    println!("------------\t----------------------------------------------");
-    for file in info.files() {
-        println!("{:12}\t{}",
-                 file.length(),
-                 file.paths().next().unwrap_or("<unknown>"));
-    }
-}
+const PEER_REQ_PKT_SZ: usize = 14;
 
 /// Print general information about the torrent.
 fn print_metainfo_overview(bytes: &[u8]) {
@@ -80,10 +66,8 @@ fn print_metainfo_overview(bytes: &[u8]) {
     println!("Piece Length: {:?}", info.piece_length());
     println!("Number Of Pieces: {}", info.pieces().count());
     println!("Number Of Files: {}", info.files().count());
-    println!("Total File Size: {}\n",
+    println!("Total File Size: {}",
              info.files().fold(0, |acc, nex| acc + nex.length()));
-
-    print_files(bytes);
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
@@ -151,10 +135,29 @@ fn peer_connections(peer_ip_ports: Vec<String>,
             match handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl) {
                 Ok(mut stream) => {
                     debug!("Communicating with peer {:?}", peer_ip_port_cl);
-                    let mut buff = [0; 128];
-                    let bytes_read = stream.read(&mut buff).unwrap();
-                    debug!("Bytes read: {:?}", bytes_read);
-                    debug!("Resp: {:?}", buff.to_vec());
+                    let mut buff = [0; PEER_HANDSHAKE_STRUCT_SZ];
+                    match stream.read(&mut buff) {
+			Ok(_) => {
+				let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
+				let mut peer_msg_pkt  = MutablePeerMessagePacket::new(&mut buf).unwrap();
+				peer_msg_pkt.set_len(13);
+				peer_msg_pkt.set_id(6);
+				//TODO fill length properly
+				let index_begin_length = vec![0, 0, 10];
+				peer_msg_pkt.set_payload(&index_begin_length);
+				match stream.write(peer_msg_pkt.packet()) {
+					Ok(_) => {
+						let mut buf_read = vec![0; 2048];
+						match stream.read(&mut buf_read) {
+							Ok(bytes_read) => {debug!("Bytes read: {:?}", bytes_read);},
+							Err(e) => error!("Read failed! {:?}", e),
+						}
+					},
+					Err(e) => error!("Write to stream failed! {:?}", e),
+				}
+			},
+			Err(e) => error!("Reading from the stream failed! {:?}", e),
+			}
                 }
                 Err(_) => {
                     error!("Closing thread with peer {:?}", peer_ip_port_cl);
@@ -179,7 +182,7 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
             match stream.write(ph.packet()) {
                 Ok(_) => {
                     debug!("Sending message successful!");
-                    debug!("{:?}", ph.packet());
+                    trace!("{:?}", ph.packet());
                     Ok((stream))
                 }
                 Err(_) => {
@@ -216,14 +219,7 @@ fn main() {
                 let cmd = cmd.trim().split(' ').collect::<Vec<&str>>();
 
                 match cmd[0] {
-                    "help" | "h" => {
-                        println!("Commands:
-parse/p <torrent file path>      - show Metainfo File Overview
-connect/c <torrent file path>    - initiate connection to tracker, and handshake with peers
-showfiles/sf <torrent file path> - show files in the torrent
-help/h                           - show this help");
-                    }
-                    "parse" | "p" => {
+                    "parse" => {
                         if cmd.len() != 2 {
                             error!("usage: parse <torrent file>");
                         } else {
@@ -240,7 +236,7 @@ help/h                           - show this help");
                             }
                         }
                     }
-                    "connect" | "c" => {
+                    "connect" => {
                         if cmd.len() != 2 {
                             error!("usage: connect <torrent file>");
                         } else {
@@ -263,26 +259,7 @@ help/h                           - show this help");
                             }
                         }
                     }
-                    "showfiles" | "sf" => {
-                        if cmd.len() != 2 {
-                            error!("usage: connect <torrent file>");
-                        } else {
-                            let path = cmd[1];
-                            match File::open(path) {
-                                Ok(mut f) => {
-                                    let mut bytes: Vec<u8> = Vec::new();
-                                    f.read_to_end(&mut bytes).unwrap();
-
-                                    print_files(&bytes);
-                                }
-                                Err(e) => error!("{:?}", e),
-                            }
-                        }
-                    }
-                    "" => {}
-                    _ => {
-                        println!("invalid command, see \"help\"");
-                    }
+                    _ => {}
                 }
             }
             Err(ReadlineError::Interrupted) |

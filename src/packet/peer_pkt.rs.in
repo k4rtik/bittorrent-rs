@@ -15,3 +15,12 @@ pub struct PeerHandshake {
     #[length = "0"]
     payload: Vec<u8>,
 }
+
+#[packet]
+pub struct PeerMessage {
+    len: u32be,
+    id: u8,
+    #[payload]
+    #[length = "len-1"]
+    payload: Vec<u8>,
+}

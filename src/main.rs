@@ -8,11 +8,13 @@ extern crate bip_metainfo;
 extern crate bip_utracker;
 extern crate chrono;
 extern crate hyper;
+extern crate pnet;
+extern crate pnet_macros_support;
 extern crate pretty_env_logger;
 extern crate rustyline;
 extern crate url;
-extern crate pnet;
-extern crate pnet_macros_support;
+
+mod packet;
 
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
@@ -20,19 +22,17 @@ use bip_utracker::contact::CompactPeersV4;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;
+use packet::peer_pkt::MutablePeerHandshakePacket;
+use pnet::packet::Packet;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use url::Url;
-use pnet::packet::Packet;
-use packet::peer_pkt::MutablePeerHandshakePacket;
 
 use std::fs::File;
 use std::io::prelude::*;
+use std::net::TcpStream;
 use std::str;
 use std::string::String;
-use std::net::TcpStream;
-
-mod packet;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;

@@ -131,6 +131,7 @@ fn connect_to_tracker(metainfo: MetainfoFile,
         .unwrap();
     trace!("{:?}", peers);
     let mut ip_ports: Vec<String> = Vec::new();
+    debug!("Peer list received:");
     for peer in peers.iter() {
         debug!("{:?}", peer);
         ip_ports.push(peer.to_string());

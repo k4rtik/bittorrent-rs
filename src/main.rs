@@ -42,6 +42,21 @@ const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
 const PEER_REQ_PKT_SZ: usize = 14;
 
+/// Print file list from the torrent.
+fn print_files(bytes: &[u8]) {
+    let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
+    let info = metainfo.info();
+
+    println!("File List:");
+    println!("Size (bytes)\tPath");
+    println!("------------\t----------------------------------------------");
+    for file in info.files() {
+        println!("{:12}\t{}",
+                 file.length(),
+                 file.paths().next().unwrap_or("<unknown>"));
+    }
+}
+
 /// Print general information about the torrent.
 fn print_metainfo_overview(bytes: &[u8]) {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
@@ -68,8 +83,10 @@ fn print_metainfo_overview(bytes: &[u8]) {
     println!("Piece Length: {:?}", info.piece_length());
     println!("Number Of Pieces: {}", info.pieces().count());
     println!("Number Of Files: {}", info.files().count());
-    println!("Total File Size: {}",
+    println!("Total File Size: {}\n",
              info.files().fold(0, |acc, nex| acc + nex.length()));
+
+    print_files(bytes);
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
@@ -223,7 +240,14 @@ fn main() {
                 let cmd = cmd.trim().split(' ').collect::<Vec<&str>>();
 
                 match cmd[0] {
-                    "parse" => {
+                    "help" | "h" => {
+                        println!("Commands:
+parse/p <torrent file path>      - show Metainfo File Overview
+connect/c <torrent file path>    - initiate connection to tracker, and handshake with peers
+showfiles/sf <torrent file path> - show files in the torrent
+help/h                           - show this help");
+                    }
+                    "parse" | "p" => {
                         if cmd.len() != 2 {
                             error!("usage: parse <torrent file>");
                         } else {
@@ -240,7 +264,7 @@ fn main() {
                             }
                         }
                     }
-                    "connect" => {
+                    "connect" | "c" => {
                         if cmd.len() != 2 {
                             error!("usage: connect <torrent file>");
                         } else {
@@ -263,7 +287,26 @@ fn main() {
                             }
                         }
                     }
-                    _ => {}
+                    "showfiles" | "sf" => {
+                        if cmd.len() != 2 {
+                            error!("usage: connect <torrent file>");
+                        } else {
+                            let path = cmd[1];
+                            match File::open(path) {
+                                Ok(mut f) => {
+                                    let mut bytes: Vec<u8> = Vec::new();
+                                    f.read_to_end(&mut bytes).unwrap();
+
+                                    print_files(&bytes);
+                                }
+                                Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    "" => {}
+                    _ => {
+                        println!("invalid command, see \"help\"");
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) |

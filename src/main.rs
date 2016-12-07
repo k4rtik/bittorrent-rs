@@ -34,6 +34,7 @@ use std::net::TcpStream;
 use std::str;
 use std::string::String;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
@@ -116,6 +117,21 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
         ip_ports.push(peer.to_string());
     }
     Ok((ip_ports, info_hash_str.to_string()))
+}
+
+fn peer_connections(peer_ip_ports: Vec<String>,
+                    info_hash: &str,
+                    peer_id: &str)
+                    -> Result<(), String> {
+    for peer_ip_port in peer_ip_ports {
+        let peer_ip_port_cl = peer_ip_port.clone();
+        let info_hash_cl = info_hash.to_string().clone();
+        let peer_id_cl = peer_id.to_string().clone();
+        thread::spawn(move || {
+            handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl);
+        });
+    }
+    Ok(())
 }
 
 fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<(), String> {
@@ -202,10 +218,7 @@ fn main() {
                                                            &client_id,
                                                            6882)
                                             .unwrap();
-                                    for peer_ip_port in result.0 {
-                                        handshake_peer(&peer_ip_port, &result.1, &client_id)
-                                            .unwrap();
-                                    }
+                                    peer_connections(result.0, &result.1, &client_id).unwrap();
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

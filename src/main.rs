@@ -51,7 +51,7 @@ fn print_metainfo_overview(bytes: &[u8]) {
         });
     let utc_creation_date = metainfo.creation_date().map(|c| UTC.timestamp(c, 0));
 
-    println!("\n\n-----------------------------Metainfo File Overview-----------------------------");
+    println!("------Metainfo File Overview-----");
 
     println!("InfoHash: {}", info_hash_hex);
     println!("Main Tracker: {:?}", metainfo.main_tracker());
@@ -80,7 +80,7 @@ fn connect_to_tracker(metainfo_file: MetainfoFile,
 
     let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
     url.query_pairs_mut()
-        .append_pair("info_hash", &info_hash_str)
+        .append_pair("info_hash", info_hash_str)
         .append_pair("peer_id", peer_id)
         .append_pair("port", &(port.to_string()))
         // TODO parametrize this
@@ -176,6 +176,21 @@ fn main() {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
                                     print_metainfo_overview(&bytes);
+                                }
+                                Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    "connect" => {
+                        if cmd.len() != 2 {
+                            error!("usage: connect <torrent file>");
+                        } else {
+                            let path = cmd[1];
+                            match File::open(path) {
+                                Ok(mut f) => {
+                                    let mut bytes: Vec<u8> = Vec::new();
+                                    f.read_to_end(&mut bytes).unwrap();
+
                                     // TODO: generate peer ID
                                     let result =
                                         connect_to_tracker(MetainfoFile::from_bytes(&bytes)
@@ -197,9 +212,7 @@ fn main() {
                     _ => {}
                 }
             }
-            Err(ReadlineError::Interrupted) => {
-                break;
-            }
+            Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => {
                 break;
             }

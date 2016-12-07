@@ -145,13 +145,24 @@ fn peer_connections(peer_ip_ports: Vec<String>,
         let info_hash_cl = info_hash.to_string().clone();
         let peer_id_cl = peer_id.to_string().clone();
         thread::spawn(move || {
-            handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl);
+            match handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl) {
+                Ok(mut stream) => {
+                    debug!("Communicating with peer {:?}", peer_ip_port_cl);
+                    let mut buff = [0; 128];
+                    let bytes_read = stream.read(&mut buff).unwrap();
+                    debug!("Bytes read: {:?}", bytes_read);
+                    debug!("Resp: {:?}", buff.to_vec());
+                }
+                Err(_) => {
+                    error!("Closing thread with peer {:?}", peer_ip_port_cl);
+                }
+            }
         });
     }
     Ok(())
 }
 
-fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<(), String> {
+fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<TcpStream, String> {
     let mut buf = vec![0u8; PEER_HANDSHAKE_STRUCT_SZ];
     let mut ph = MutablePeerHandshakePacket::new(&mut buf).unwrap();
     ph.set_pstrlen("BitTorrent protocol".len() as u8);
@@ -165,7 +176,8 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
             match stream.write(ph.packet()) {
                 Ok(_) => {
                     debug!("Sending message successful!");
-                    Ok(())
+                    debug!("{:?}", ph.packet());
+                    Ok((stream))
                 }
                 Err(_) => {
                     error!("Sending message failed!");

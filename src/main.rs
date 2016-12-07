@@ -61,7 +61,7 @@ fn print_metainfo_overview(bytes: &[u8]) {
     let info_hash_hex = metainfo.info_hash()
         .as_ref()
         .iter()
-        .map(|b| format!("{:02X}", b))
+        .map(|b| format!("{:02x}", b))
         .fold(String::new(), |mut acc, nex| {
             acc.push_str(&nex);
             acc
@@ -86,18 +86,20 @@ fn print_metainfo_overview(bytes: &[u8]) {
     print_files(bytes);
 }
 
-fn connect_to_tracker(metainfo_file: MetainfoFile,
+fn connect_to_tracker(metainfo: MetainfoFile,
                       peer_id: &str,
                       port: u16)
                       -> Result<(Vec<String>, String), String> {
-    debug!("connecting to tracker: {:?}", metainfo_file.main_tracker());
-    let info_hash = metainfo_file.info_hash();
+    debug!("connecting to tracker: {:?}", metainfo.main_tracker());
+
+    let info_hash = metainfo.info_hash();
     // TODO figure can this conversion to url-encoded form be done safely?
     let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
-    // TODO this needs to be calculated based on what we have
-    let total_len = metainfo_file.info().files().fold(0, |acc, nex| acc + nex.length());
 
-    let mut url = Url::parse(metainfo_file.main_tracker().unwrap()).unwrap();
+    // TODO this needs to be calculated based on what we have
+    let total_len = metainfo.info().files().fold(0, |acc, nex| acc + nex.length());
+
+    let mut url = Url::parse(metainfo.main_tracker().unwrap()).unwrap();
     url.query_pairs_mut()
         .append_pair("info_hash", info_hash_str)
         .append_pair("peer_id", peer_id)

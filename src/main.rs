@@ -39,6 +39,21 @@ use std::thread;
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
 
+/// Print file list from the torrent.
+fn print_files(bytes: &[u8]) {
+    let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
+    let info = metainfo.info();
+
+    println!("File List:");
+    println!("Size (bytes)\tPath");
+    println!("------------\t----------------------------------------------");
+    for file in info.files() {
+        println!("{:12}\t{}",
+                 file.length(),
+                 file.paths().next().unwrap_or("<unknown>"));
+    }
+}
+
 /// Print general information about the torrent.
 fn print_metainfo_overview(bytes: &[u8]) {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
@@ -65,8 +80,10 @@ fn print_metainfo_overview(bytes: &[u8]) {
     println!("Piece Length: {:?}", info.piece_length());
     println!("Number Of Pieces: {}", info.pieces().count());
     println!("Number Of Files: {}", info.files().count());
-    println!("Total File Size: {}",
+    println!("Total File Size: {}\n",
              info.files().fold(0, |acc, nex| acc + nex.length()));
+
+    print_files(bytes);
 }
 
 fn connect_to_tracker(metainfo_file: MetainfoFile,
@@ -226,6 +243,22 @@ help/h                           - show this help");
                                                            6882)
                                             .unwrap();
                                     peer_connections(result.0, &result.1, &client_id).unwrap();
+                                }
+                                Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    "showfiles" | "sf" => {
+                        if cmd.len() != 2 {
+                            error!("usage: connect <torrent file>");
+                        } else {
+                            let path = cmd[1];
+                            match File::open(path) {
+                                Ok(mut f) => {
+                                    let mut bytes: Vec<u8> = Vec::new();
+                                    f.read_to_end(&mut bytes).unwrap();
+
+                                    print_files(&bytes);
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

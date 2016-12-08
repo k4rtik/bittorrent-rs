@@ -157,24 +157,15 @@ fn peer_connections(peer_ip_ports: Vec<String>,
                     let mut buff = [0; PEER_HANDSHAKE_STRUCT_SZ];
                     match stream.read(&mut buff) {
                         Ok(_) => {
-                            let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
-                            let mut peer_msg_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
-                            peer_msg_pkt.set_len(13);
-                            peer_msg_pkt.set_id(6);
-                            // TODO fill length properly
-                            let index_begin_length = vec![0, 0, 10];
-                            peer_msg_pkt.set_payload(&index_begin_length);
-                            match stream.write(peer_msg_pkt.packet()) {
-                                Ok(_) => {
-                                    let mut buf_read = vec![0; 2048];
-                                    match stream.read(&mut buf_read) {
-                                        Ok(bytes_read) => {
-                                            debug!("Bytes read: {:?}", bytes_read);
-                                        }
-                                        Err(e) => error!("Read failed! {:?}", e),
-                                    }
+                            // TODO determine the below three parameters logically
+                            let index = 0;
+                            let begin = 0;
+                            let length = 10;
+                            match request_piece(stream, index, begin, length) {
+                                Ok(buf_read) => {
+                                    debug!("buf_read: {:?}", buf_read);
                                 }
-                                Err(e) => error!("Write to stream failed! {:?}", e),
+                                Err(_) => error!("Requesting piece failed!"),
                             }
                         }
                         Err(e) => error!("Reading from the stream failed! {:?}", e),
@@ -187,6 +178,45 @@ fn peer_connections(peer_ip_ports: Vec<String>,
         });
     }
     Ok(())
+}
+
+
+fn request_piece(mut stream: TcpStream,
+                 index: u32,
+                 begin: u32,
+                 length: u32)
+                 -> Result<Vec<u8>, String> {
+    let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
+    let mut peer_msg_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
+    peer_msg_pkt.set_len(13);
+    peer_msg_pkt.set_id(6);
+    let mut index_begin_length: Vec<u32> = Vec::new();
+    index_begin_length.push(index);
+    index_begin_length.push(begin);
+    index_begin_length.push(length);
+    let byte_arr = unsafe { std::mem::transmute::<Vec<u32>, Vec<u8>>(index_begin_length) };
+
+    peer_msg_pkt.set_payload(&byte_arr);
+
+    match stream.write(peer_msg_pkt.packet()) {
+        Ok(_) => {
+            let mut buf_read = vec![0; 2048];
+            match stream.read(&mut buf_read) {
+                Ok(bytes_read) => {
+                    debug!("Bytes read: {:?}", bytes_read);
+                    Ok(buf_read[..bytes_read].to_vec())
+                }
+                Err(e) => {
+                    error!("Read failed! {:?}", e);
+                    Err("Read failed!".to_owned())
+                }
+            }
+        }
+        Err(e) => {
+            error!("Write to stream failed! {:?}", e);
+            Err("Write to stream failed!".to_owned())
+        }
+    }
 }
 
 fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<TcpStream, String> {

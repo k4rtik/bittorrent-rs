@@ -319,7 +319,7 @@ help/h                           - show this help");
                     }
                     "showfiles" | "sf" => {
                         if cmd.len() != 2 {
-                            error!("usage: connect <torrent file>");
+                            error!("usage: showfiles <torrent file>");
                         } else {
                             let path = cmd[1];
                             match File::open(path) {

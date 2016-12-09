@@ -172,7 +172,7 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) 
                             let length = 10;
                             match request_piece(stream, index, begin, length) {
                                 Ok(buf_read) => {
-                                    debug!("buf_read: {:?}", buf_read);
+                                    trace!("buf_read: {:?}", buf_read);
                                 }
                                 Err(_) => error!("Requesting piece failed!"),
                             }

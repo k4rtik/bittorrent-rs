@@ -1,3 +1,7 @@
+#![recursion_limit = "1024"]
+
+#[macro_use]
+extern crate error_chain;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -18,9 +22,15 @@ extern crate url;
 mod btclient;
 mod packet;
 
+mod errors {
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain!{}
+}
+
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
 use bip_utracker::contact::CompactPeersV4;
+use errors::*;
 use chrono::{TimeZone, UTC};
 use hyper::Client;
 use hyper::header::Connection;

@@ -53,7 +53,7 @@ const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
 const PEER_REQ_PKT_SZ: usize = 14;
 
 /// Print file list from the torrent.
-fn print_files(bytes: &[u8]) {
+fn print_files(bytes: &[u8]) -> Result<()> {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
     let info = metainfo.info();
 
@@ -65,10 +65,11 @@ fn print_files(bytes: &[u8]) {
                  file.length(),
                  file.paths().next().unwrap_or("<unknown>"));
     }
+    Ok(())
 }
 
 /// Print general information about the torrent.
-fn print_metainfo_overview(bytes: &[u8]) {
+fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
     let info = metainfo.info();
     let info_hash_hex = metainfo.info_hash()
@@ -96,13 +97,14 @@ fn print_metainfo_overview(bytes: &[u8]) {
     println!("Total File Size: {}\n",
              info.files().fold(0, |acc, nex| acc + nex.length()));
 
-    print_files(bytes);
+    print_files(bytes)?;
+    Ok(())
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
                       peer_id: &str,
                       port: u16)
-                      -> Result<(Vec<String>, String), String> {
+                      -> Result<(Vec<String>, String)> {
     debug!("connecting to tracker: {:?}", metainfo.main_tracker());
 
     let info_hash = metainfo.info_hash();
@@ -152,10 +154,7 @@ fn connect_to_tracker(metainfo: MetainfoFile,
     Ok((ip_ports, info_hash_str.to_string()))
 }
 
-fn peer_connections(peer_ip_ports: Vec<String>,
-                    info_hash: &str,
-                    peer_id: &str)
-                    -> Result<(), String> {
+fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) -> Result<()> {
     for peer_ip_port in peer_ip_ports {
         let peer_ip_port_cl = peer_ip_port.clone();
         let info_hash_cl = info_hash.to_string().clone();
@@ -191,11 +190,7 @@ fn peer_connections(peer_ip_ports: Vec<String>,
 }
 
 
-fn request_piece(mut stream: TcpStream,
-                 index: u32,
-                 begin: u32,
-                 length: u32)
-                 -> Result<Vec<u8>, String> {
+fn request_piece(mut stream: TcpStream, index: u32, begin: u32, length: u32) -> Result<Vec<u8>> {
     let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
     let mut peer_msg_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
     peer_msg_pkt.set_len(13);
@@ -217,19 +212,19 @@ fn request_piece(mut stream: TcpStream,
                     Ok(buf_read[..bytes_read].to_vec())
                 }
                 Err(e) => {
-                    error!("Read failed! {:?}", e);
-                    Err("Read failed!".to_owned())
+                    // error!("Read failed! {:?}", e);
+                    bail!("Read failed! {:?}", e)
                 }
             }
         }
         Err(e) => {
-            error!("Write to stream failed! {:?}", e);
-            Err("Write to stream failed!".to_owned())
+            bail!("Write to stream failed! {:?}", e)
+            // Err("Write to stream failed!".to_owned())
         }
     }
 }
 
-fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<TcpStream, String> {
+fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<TcpStream> {
     let mut buf = vec![0u8; PEER_HANDSHAKE_STRUCT_SZ];
     let mut ph = MutablePeerHandshakePacket::new(&mut buf).unwrap();
     ph.set_pstrlen("BitTorrent protocol".len() as u8);
@@ -247,14 +242,14 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
                     Ok((stream))
                 }
                 Err(_) => {
-                    error!("Sending message failed!");
-                    Err("Sending message failed!".to_owned())
+                    bail!("Sending message failed!")
+                    // Err("Sending message failed!".to_owned())
                 }
             }
         }
         Err(e) => {
-            error!("Connection to peer {:?} failed! {:?}", peer_ip_port, e);
-            Err("Connection to peer failed!".to_owned())
+            bail!("Connection to peer {:?} failed! {:?}", peer_ip_port, e)
+            // Err("Connection to peer failed!".to_owned())
         }
     }
 }
@@ -262,6 +257,25 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
 fn main() {
     pretty_env_logger::init();
 
+    // See: https://brson.github.io/2016/11/30/starting-with-error-chain for explanation
+    if let Err(ref e) = run() {
+        println!("error: {}", e);
+
+        for e in e.iter().skip(1) {
+            println!("caused by: {}", e);
+        }
+
+        // The backtrace is not always generated. Try to run this example
+        // with `RUST_BACKTRACE=1`.
+        if let Some(backtrace) = e.backtrace() {
+            println!("backtrace: {:?}", backtrace);
+        }
+
+        ::std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let mut rl = Editor::<()>::new();
     if rl.load_history(HISTORY_FILE).is_err() {
         info!("No previous history!");
@@ -298,7 +312,7 @@ help/h                           - show this help");
                                 Ok(mut f) => {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
-                                    print_metainfo_overview(&bytes);
+                                    print_metainfo_overview(&bytes)?;
                                 }
                                 Err(e) => error!("{:?}", e),
                             }
@@ -319,9 +333,9 @@ help/h                           - show this help");
                                         connect_to_tracker(MetainfoFile::from_bytes(&bytes)
                                                                .unwrap(),
                                                            &client_id,
-                                                           6882)
-                                            .unwrap();
-                                    peer_connections(result.0, &result.1, &client_id).unwrap();
+                                                           6882)?;
+                                    // .unwrap();
+                                    peer_connections(result.0, &result.1, &client_id)?;
                                 }
                                 Err(e) => error!("{:?}", e),
                             }
@@ -336,8 +350,7 @@ help/h                           - show this help");
                                 Ok(mut f) => {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
-
-                                    print_files(&bytes);
+                                    print_files(&bytes)?;
                                 }
                                 Err(e) => error!("{:?}", e),
                             }
@@ -360,4 +373,5 @@ help/h                           - show this help");
         }
     }
     rl.save_history(HISTORY_FILE).unwrap();
+    Ok(())
 }

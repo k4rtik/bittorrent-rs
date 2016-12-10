@@ -27,6 +27,29 @@ struct Torrent {
     num_leachers: usize,
 }
 
+impl Torrent {
+    fn new(url: Url, plen: usize, pieces: Vec<ShaHash>) -> Torrent {
+        Torrent {
+            announce: url,
+            piece_length: plen,
+            pieces_sha1: pieces,
+            name: String::new(),
+            length: None,
+            md5: None,
+            files: None,
+
+            peers: Vec::new(),
+            uploaded: 0,
+            downloaded: 0,
+            left: 0,
+            interval: 0, // in seconds
+            tracker_id: String::new(),
+            num_seeders: 0,
+            num_leachers: 0,
+        }
+    }
+}
+
 struct File {
     path: String, // can be file or directory name
     length: usize,

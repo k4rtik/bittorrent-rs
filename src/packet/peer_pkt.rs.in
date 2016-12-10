@@ -24,3 +24,12 @@ pub struct PeerMessage {
     #[length = "len-1"]
     payload: Vec<u8>,
 }
+
+#[packet]
+pub struct PeerStatusMessage {
+    len: u32be,
+    id: u8,
+    #[payload]
+    #[length = "0"]
+    payload: Vec<u8>,
+}

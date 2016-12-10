@@ -154,6 +154,14 @@ fn connect_to_tracker(metainfo: MetainfoFile,
     Ok((ip_ports, info_hash_str.to_string()))
 }
 
+fn send_keep_alive(mut stream: &TcpStream) -> Result<()> {
+    let buf = vec![0; 1];
+    match stream.write(&buf) {
+        Ok(_) => Ok(()),
+        Err(e) => bail!("Writing to stream  failed! {:?}", e),
+    }
+}
+
 fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) -> Result<()> {
     for peer_ip_port in peer_ip_ports {
         let peer_ip_port_cl = peer_ip_port.clone();
@@ -163,18 +171,26 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) 
             match handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl) {
                 Ok(mut stream) => {
                     debug!("Communicating with peer {:?}", peer_ip_port_cl);
+                    debug!("Starting thread timer...");
+                    let mut timer = SystemTime::now();
                     let mut buff = [0; PEER_HANDSHAKE_STRUCT_SZ];
                     match stream.read(&mut buff) {
                         Ok(_) => {
-                            // TODO determine the below three parameters logically
-                            let index = 0;
-                            let begin = 0;
-                            let length = 10;
-                            match request_piece(stream, index, begin, length) {
-                                Ok(buf_read) => {
-                                    trace!("buf_read: {:?}", buf_read);
+                            loop {
+                                // TODO determine the below three parameters logically
+                                let index = 0;
+                                let begin = 0;
+                                let length = 10;
+                                match request_piece(&stream, index, begin, length) {
+                                    Ok(buf_read) => {
+                                        trace!("buf_read: {:?}", buf_read);
+                                    }
+                                    Err(_) => error!("Requesting piece failed!"),
                                 }
-                                Err(_) => error!("Requesting piece failed!"),
+                                if timer.elapsed().unwrap().as_secs() > 100 {
+                                    send_keep_alive(&stream);
+                                    timer = SystemTime::now();
+                                }
                             }
                         }
                         Err(e) => error!("Reading from the stream failed! {:?}", e),
@@ -190,7 +206,7 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) 
 }
 
 
-fn request_piece(mut stream: TcpStream, index: u32, begin: u32, length: u32) -> Result<Vec<u8>> {
+fn request_piece(mut stream: &TcpStream, index: u32, begin: u32, length: u32) -> Result<Vec<u8>> {
     let mut buf = vec![0u8; PEER_REQ_PKT_SZ];
     let mut peer_msg_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
     peer_msg_pkt.set_len(13);
@@ -336,6 +352,7 @@ help/h                           - show this help");
                                                            6882)?;
                                     // .unwrap();
                                     peer_connections(result.0, &result.1, &client_id)?;
+
                                 }
                                 Err(e) => error!("{:?}", e),
                             }

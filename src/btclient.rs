@@ -34,7 +34,7 @@ impl BTClient {
     }
 }
 
-struct Torrent {
+pub struct Torrent {
     // MetaInfo
     announce: Url,
     piece_length: usize,
@@ -56,7 +56,7 @@ struct Torrent {
 }
 
 impl Torrent {
-    fn new(url: Url, plen: usize, pieces: Vec<ShaHash>) -> Torrent {
+    pub fn new(url: Url, plen: usize, pieces: Vec<ShaHash>) -> Torrent {
         Torrent {
             announce: url,
             piece_length: plen,

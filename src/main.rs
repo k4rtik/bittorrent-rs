@@ -35,7 +35,6 @@ use bip_utracker::contact::CompactPeersV4;
 use btclient::BTClient;
 use chrono::{TimeZone, UTC};
 use errors::*;
-use futures::stream::Stream;
 use hyper::Client;
 use hyper::header::Connection;
 use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};

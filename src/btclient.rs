@@ -1,12 +1,14 @@
 use bip_util::sha::ShaHash;
 use errors::*;
 use url::Url;
+use std::collections::HashMap;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct BTClient {
-    torrents: Vec<Torrent>,
+    torrents: HashMap<u32, Torrent>,
     id: String, // peer_id or client id
+    torr_count: u32,
 }
 
 impl BTClient {
@@ -15,19 +17,29 @@ impl BTClient {
         let duration = now.duration_since(UNIX_EPOCH).unwrap();
         let client_id = "-bittorrent-rs-".to_owned() + &format!("{}", duration.as_secs() % 100_000);
         BTClient {
-            torrents: Vec::new(),
+            torrents: HashMap::new(),
             id: client_id,
+            torr_count: 0,
         }
     }
 
-    pub fn add(self: &mut BTClient, torrent: Torrent) -> Result<()> {
-        Ok(())
+    pub fn add(self: &mut BTClient, torrent_name: String, mut torrent: Torrent) -> Result<usize> {
+        self.torr_count += 1;
+        torrent.name = torrent_name;
+        self.torrents.insert(self.torr_count, torrent);
+        Ok(self.torrents.len())
     }
-    pub fn remove(self: &mut BTClient, torrent: Torrent) -> Result<()> {
-        Ok(())
+    pub fn remove(self: &mut BTClient, id: u32) -> Result<usize> {
+        self.torrents.remove(&id);
+        Ok(self.torrents.len())
     }
-    pub fn list(self: &BTClient) -> Result<()> {
-        Ok(())
+    pub fn list(self: &BTClient) -> Result<Vec<(u32, String)>> {
+        let mut t_list = Vec::new();
+        for t in &self.torrents {
+            let res = (t.0.clone(), t.1.name.clone());
+            t_list.push(res);
+        }
+        Ok(t_list)
     }
     pub fn get_id(self: &BTClient) -> String {
         self.id.clone()

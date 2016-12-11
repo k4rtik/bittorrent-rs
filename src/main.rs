@@ -46,6 +46,7 @@ use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::{Core, Timeout};
 use url::Url;
+use btclient::Torrent;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -53,7 +54,6 @@ use std::net::SocketAddr;
 use std::str;
 use std::string::String;
 use std::thread;
-use std::time::Duration;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
@@ -185,9 +185,9 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: String
                     .chain_err(|| "handshake failed") {
                     // debug!("Communicating with peer {:?}", peer_ip_port_cl);
                     // debug!("Starting thread timer...");
-                    if let Ok((client, buf, amt)) =
-                        l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
-                            .chain_err(|| "didn't receive handshake response from peer") {
+                    if let Ok((_, buf, amt)) =
+                           l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                        .chain_err(|| "didn't receive handshake response from peer") {
                         if buf[0] == 19 &&
                            String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
                            amt == 68 {
@@ -306,7 +306,7 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let btclient = BTClient::new();
+    let mut btclient = BTClient::new();
 
     let config = Config::builder()
         .history_ignore_space(true)
@@ -363,19 +363,46 @@ help/h                           - show this help");
                                 Ok(mut f) => {
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
-
                                     // TODO
                                     // create Torrent (parse metainfo file into our struct)
                                     // call BTClient->add()
+                                    let t_file = MetainfoFile::from_bytes(&bytes).unwrap();
+                                    let torrent_name = path.split('/').collect::<Vec<&str>>().pop().unwrap().split(".torrent").collect::<Vec<&str>>()[0];
+                                    debug!("Torrent file {:?}", torrent_name);
+                                    let torrent =
+                                        Torrent::new(Url::parse(t_file.main_tracker()
+                                                             .unwrap())
+                                                         .unwrap(),
+                                                     t_file.info().piece_length() as usize,
+                                                     Vec::new());
                                     let result =
                                         connect_to_tracker(MetainfoFile::from_bytes(&bytes)
                                                                .unwrap(),
                                                            btclient.get_id(),
                                                            6882)?;
                                     peer_connections(result.0, &result.1, btclient.get_id())?;
-
+                                    btclient.add(torrent_name.to_string(), torrent);
                                 }
                                 Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    "remove" | "r" => {
+                        if cmd.len() != 2 {
+                            error!("usage: remove <torrent number>");
+                        } else {
+                            let id = cmd[1].parse::<u32>().unwrap();
+                            btclient.remove(id);
+                        }
+                    }
+                    "list" | "l" => {
+                        if cmd.len() != 1 {
+                            error!("usage: list");
+                        } else {
+                            let t_list = btclient.list().unwrap();
+                            println!("ID\tTorrent");
+                            for t in t_list {
+                                println!("{}\t{}", t.0, t.1);
                             }
                         }
                     }

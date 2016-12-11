@@ -1,8 +1,8 @@
 use bip_util::sha::ShaHash;
 use errors::*;
 use url::Url;
-use std::collections::HashMap;
 
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct BTClient {
@@ -29,10 +29,12 @@ impl BTClient {
         self.torrents.insert(self.torr_count, torrent);
         Ok(self.torrents.len())
     }
+
     pub fn remove(self: &mut BTClient, id: u32) -> Result<usize> {
         self.torrents.remove(&id);
         Ok(self.torrents.len())
     }
+
     pub fn list(self: &BTClient) -> Result<Vec<(u32, String)>> {
         let mut t_list = Vec::new();
         for t in &self.torrents {
@@ -41,6 +43,7 @@ impl BTClient {
         }
         Ok(t_list)
     }
+
     pub fn get_id(self: &BTClient) -> String {
         self.id.clone()
     }

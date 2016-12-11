@@ -21,9 +21,12 @@ log = "*"
 nom = "*"
 pnet = "*"
 pnet_macros_support = "*"
-rustyline = "*"
 tokio-core = "*"
 url = "*"
 
 [dependencies.pretty_env_logger]
 git = "https://github.com/seanmonstar/pretty-env-logger"
+
+[dependencies.rustyline]
+git = "https://github.com/kkawakam/rustyline"
+optional = false

@@ -39,7 +39,8 @@ use hyper::Client;
 use hyper::header::Connection;
 use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
 use pnet::packet::Packet;
-use rustyline::Editor;
+use rustyline::completion::FilenameCompleter;
+use rustyline::{Config, CompletionType, Editor};
 use rustyline::error::ReadlineError;
 use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
@@ -307,7 +308,13 @@ fn main() {
 fn run() -> Result<()> {
     let btclient = BTClient::new();
 
-    let mut rl = Editor::<()>::new();
+    let config = Config::builder()
+        .history_ignore_space(true)
+        .completion_type(CompletionType::List)
+        .build();
+    let c = FilenameCompleter::new();
+    let mut rl = Editor::with_config(config);
+    rl.set_completer(Some(c));
     if rl.load_history(HISTORY_FILE).is_err() {
         info!("No previous history!");
     }
@@ -315,12 +322,12 @@ fn run() -> Result<()> {
     loop {
         let readline = rl.readline("> ");
         match readline {
-            Ok(cmd) => {
-                rl.add_history_entry(&cmd);
+            Ok(line) => {
+                rl.add_history_entry(line.as_ref());
 
-                let cmd = cmd.trim().split(' ').collect::<Vec<&str>>();
+                let line = line.trim().split(' ').collect::<Vec<&str>>();
 
-                match cmd[0] {
+                match line[0] {
                     "help" | "h" => {
                         println!("Commands:
 parse/p <torrent file path>      - show Metainfo File Overview
@@ -331,10 +338,10 @@ showfiles/sf <torrent file path> - show files in the torrent
 help/h                           - show this help");
                     }
                     "parse" | "p" => {
-                        if cmd.len() != 2 {
+                        if line.len() != 2 {
                             error!("usage: parse <torrent file>");
                         } else {
-                            let path = cmd[1];
+                            let path = line[1];
                             debug!("MetainfoFile: {:?}", path);
 
                             match File::open(path) {
@@ -348,10 +355,10 @@ help/h                           - show this help");
                         }
                     }
                     "add" | "a" => {
-                        if cmd.len() != 2 {
+                        if line.len() != 2 {
                             error!("usage: add <torrent file>");
                         } else {
-                            let path = cmd[1];
+                            let path = line[1];
                             match File::open(path) {
                                 Ok(mut f) => {
                                     let mut bytes: Vec<u8> = Vec::new();
@@ -373,10 +380,10 @@ help/h                           - show this help");
                         }
                     }
                     "showfiles" | "sf" => {
-                        if cmd.len() != 2 {
+                        if line.len() != 2 {
                             error!("usage: showfiles <torrent file>");
                         } else {
-                            let path = cmd[1];
+                            let path = line[1];
                             match File::open(path) {
                                 Ok(mut f) => {
                                     let mut bytes: Vec<u8> = Vec::new();
@@ -393,8 +400,12 @@ help/h                           - show this help");
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) |
+            Err(ReadlineError::Interrupted) => {
+                info!("CTRL-C");
+                break;
+            }
             Err(ReadlineError::Eof) => {
+                info!("CTRL-D");
                 break;
             }
             Err(err) => {

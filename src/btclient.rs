@@ -1,9 +1,37 @@
-use url::Url;
 use bip_util::sha::ShaHash;
+use errors::*;
+use url::Url;
 
-struct BTClient {
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct BTClient {
     torrents: Vec<Torrent>,
     id: String, // peer_id or client id
+}
+
+impl BTClient {
+    pub fn new() -> BTClient {
+        let now = SystemTime::now();
+        let duration = now.duration_since(UNIX_EPOCH).unwrap();
+        let client_id = "-bittorrent-rs-".to_owned() + &format!("{}", duration.as_secs() % 100_000);
+        BTClient {
+            torrents: Vec::new(),
+            id: client_id,
+        }
+    }
+
+    pub fn add(self: &mut BTClient, torrent: Torrent) -> Result<()> {
+        Ok(())
+    }
+    pub fn remove(self: &mut BTClient, torrent: Torrent) -> Result<()> {
+        Ok(())
+    }
+    pub fn list(self: &BTClient) -> Result<()> {
+        Ok(())
+    }
+    pub fn get_id(self: &BTClient) -> String {
+        self.id.clone()
+    }
 }
 
 struct Torrent {

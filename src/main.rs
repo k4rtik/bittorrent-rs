@@ -9,14 +9,16 @@ extern crate nom;
 
 extern crate bip_bencode;
 extern crate bip_metainfo;
-extern crate bip_utracker;
 extern crate bip_util;
+extern crate bip_utracker;
 extern crate chrono;
+extern crate futures;
 extern crate hyper;
 extern crate pnet;
 extern crate pnet_macros_support;
 extern crate pretty_env_logger;
 extern crate rustyline;
+extern crate tokio_core;
 extern crate url;
 
 mod btclient;
@@ -30,23 +32,28 @@ mod errors {
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
 use bip_utracker::contact::CompactPeersV4;
-use errors::*;
+use btclient::BTClient;
 use chrono::{TimeZone, UTC};
+use errors::*;
+use futures::stream::Stream;
 use hyper::Client;
 use hyper::header::Connection;
 use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
 use pnet::packet::Packet;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
+use tokio_core::io::{read, write_all};
+use tokio_core::net::TcpStream;
+use tokio_core::reactor::{Core, Timeout};
 use url::Url;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::net::TcpStream;
+use std::net::SocketAddr;
 use std::str;
 use std::string::String;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::thread;
+use std::time::Duration;
 
 const HISTORY_FILE: &'static str = ".rustyline.history";
 const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
@@ -102,7 +109,7 @@ fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
-                      peer_id: &str,
+                      peer_id: String,
                       port: u16)
                       -> Result<(Vec<String>, String)> {
     debug!("connecting to tracker: {:?}", metainfo.main_tracker());
@@ -117,7 +124,7 @@ fn connect_to_tracker(metainfo: MetainfoFile,
     let mut url = Url::parse(metainfo.main_tracker().unwrap()).unwrap();
     url.query_pairs_mut()
         .append_pair("info_hash", info_hash_str)
-        .append_pair("peer_id", peer_id)
+        .append_pair("peer_id", &peer_id)
         .append_pair("port", &(port.to_string()))
         // TODO parametrize this
         .append_pair("uploaded", "0")
@@ -162,44 +169,63 @@ fn send_keep_alive(mut stream: &TcpStream) -> Result<()> {
     }
 }
 
-fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: &str) -> Result<()> {
-    for peer_ip_port in peer_ip_ports {
-        let peer_ip_port_cl = peer_ip_port.clone();
-        let info_hash_cl = info_hash.to_string().clone();
-        let peer_id_cl = peer_id.to_string().clone();
+fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: String) -> Result<()> {
+    for ip_port in peer_ip_ports {
+        let peer_ip_port = ip_port.clone();
+        let info_hash_clone = info_hash.to_string().clone();
+        let peer_id_clone = peer_id.clone();
         thread::spawn(move || {
-            match handshake_peer(&peer_ip_port_cl, &info_hash_cl, &peer_id_cl) {
-                Ok(mut stream) => {
-                    debug!("Communicating with peer {:?}", peer_ip_port_cl);
-                    debug!("Starting thread timer...");
-                    let mut timer = SystemTime::now();
-                    let mut buff = [0; PEER_HANDSHAKE_STRUCT_SZ];
-                    match stream.read(&mut buff) {
-                        Ok(_) => {
-                            loop {
-                                // TODO determine the below three parameters logically
-                                let index = 0;
-                                let begin = 0;
-                                let length = 10;
-                                match request_piece(&stream, index, begin, length) {
-                                    Ok(buf_read) => {
-                                        trace!("buf_read: {:?}", buf_read);
-                                    }
-                                    Err(_) => error!("Requesting piece failed!"),
-                                }
-                                if timer.elapsed().unwrap().as_secs() > 100 {
-                                    send_keep_alive(&stream);
-                                    timer = SystemTime::now();
-                                }
-                            }
+            fn run(pip: String, ih: String, pid: String) -> Result<()> {
+                let mut l = Core::new().unwrap();
+                // TODO setup timeout before handshake
+                // let dur = Duration::from_secs(100);
+                // let timeout = Timeout::new(dur, &l.handle()).unwrap();
+
+                if let Ok(client) = handshake_peer(&mut l, pip, ih, pid)
+                    .chain_err(|| "handshake failed") {
+                    // debug!("Communicating with peer {:?}", peer_ip_port_cl);
+                    // debug!("Starting thread timer...");
+                    if let Ok((client, buf, amt)) =
+                        l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                            .chain_err(|| "didn't receive handshake response from peer") {
+                        if buf[0] == 19 &&
+                           String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
+                           amt == 68 {
+                            info!("handshake successful!");
+                        } else {
+                            info!("not a useful peer")
                         }
-                        Err(e) => error!("Reading from the stream failed! {:?}", e),
+                    } else {
+                        bail!("");
                     }
+                } else {
+                    bail!("");
                 }
-                Err(_) => {
-                    error!("Closing thread with peer {:?}", peer_ip_port_cl);
+                Ok(())
+            }
+            if let Err(ref e) = run(peer_ip_port, info_hash_clone, peer_id_clone) {
+                println!("error: {}", e);
+
+                for e in e.iter().skip(1) {
+                    println!("caused by: {}", e);
+                }
+
+                if let Some(backtrace) = e.backtrace() {
+                    println!("backtrace: {:?}", backtrace);
                 }
             }
+
+            // TODO determine the below three parameters logically
+            // let index = 0;
+            // let begin = 0;
+            // let length = 10;
+            // match request_piece(&stream, index, begin, length) {
+            //     Ok(buf_read) => {
+            //         trace!("buf_read: {:?}", buf_read);
+            //     }
+            //     Err(_) => error!("Requesting piece failed!"),
+            // }
+            // send_keep_alive(&stream);
         });
     }
     Ok(())
@@ -240,7 +266,11 @@ fn request_piece(mut stream: &TcpStream, index: u32, begin: u32, length: u32) ->
     }
 }
 
-fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<TcpStream> {
+fn handshake_peer(core: &mut Core,
+                  peer_ip_port: String,
+                  info_hash: String,
+                  peer_id: String)
+                  -> Result<TcpStream> {
     let mut buf = vec![0u8; PEER_HANDSHAKE_STRUCT_SZ];
     let mut ph = MutablePeerHandshakePacket::new(&mut buf).unwrap();
     ph.set_pstrlen("BitTorrent protocol".len() as u8);
@@ -248,26 +278,12 @@ fn handshake_peer(peer_ip_port: &str, info_hash: &str, peer_id: &str) -> Result<
     ph.set_reserved(&[0; 8]);
     ph.set_info_hash(info_hash.as_bytes());
     ph.set_peer_id(peer_id.as_bytes());
-    match TcpStream::connect(peer_ip_port) {
-        Ok(mut stream) => {
-            debug!("Connection to peer {:?} successful!", peer_ip_port);
-            match stream.write(ph.packet()) {
-                Ok(_) => {
-                    debug!("Sending message successful!");
-                    trace!("{:?}", ph.packet());
-                    Ok((stream))
-                }
-                Err(_) => {
-                    bail!("Sending message failed!")
-                    // Err("Sending message failed!".to_owned())
-                }
-            }
-        }
-        Err(e) => {
-            bail!("Connection to peer {:?} failed! {:?}", peer_ip_port, e)
-            // Err("Connection to peer failed!".to_owned())
-        }
-    }
+    let handle = core.handle();
+    let client = TcpStream::connect(&peer_ip_port.parse::<SocketAddr>().unwrap(), &handle);
+    let client = core.run(client).chain_err(|| "unable to connect to peer")?;
+    let (client, _) = core.run(write_all(client, ph.packet())).unwrap();
+    trace!("{:?}", client);
+    Ok(client)
 }
 
 fn main() {
@@ -281,8 +297,6 @@ fn main() {
             println!("caused by: {}", e);
         }
 
-        // The backtrace is not always generated. Try to run this example
-        // with `RUST_BACKTRACE=1`.
         if let Some(backtrace) = e.backtrace() {
             println!("backtrace: {:?}", backtrace);
         }
@@ -292,14 +306,12 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    let btclient = BTClient::new();
+
     let mut rl = Editor::<()>::new();
     if rl.load_history(HISTORY_FILE).is_err() {
         info!("No previous history!");
     }
-
-    let now = SystemTime::now();
-    let duration = now.duration_since(UNIX_EPOCH).unwrap();
-    let client_id = "-bittorrent-rs-".to_owned() + &format!("{}", duration.as_secs() % 100_000);
 
     loop {
         let readline = rl.readline("> ");
@@ -313,7 +325,9 @@ fn run() -> Result<()> {
                     "help" | "h" => {
                         println!("Commands:
 parse/p <torrent file path>      - show Metainfo File Overview
-connect/c <torrent file path>    - initiate connection to tracker, and handshake with peers
+add/a <torrent file path>        - add a new torrent file for tracking
+remove/r <torrent id>            - remove given torrent from tracking list
+list/l                           - list torrents being tracked
 showfiles/sf <torrent file path> - show files in the torrent
 help/h                           - show this help");
                     }
@@ -334,9 +348,9 @@ help/h                           - show this help");
                             }
                         }
                     }
-                    "connect" | "c" => {
+                    "add" | "a" => {
                         if cmd.len() != 2 {
-                            error!("usage: connect <torrent file>");
+                            error!("usage: add <torrent file>");
                         } else {
                             let path = cmd[1];
                             match File::open(path) {
@@ -344,14 +358,15 @@ help/h                           - show this help");
                                     let mut bytes: Vec<u8> = Vec::new();
                                     f.read_to_end(&mut bytes).unwrap();
 
-                                    // TODO: generate peer ID
+                                    // TODO
+                                    // create Torrent (parse metainfo file into our struct)
+                                    // call BTClient->add()
                                     let result =
                                         connect_to_tracker(MetainfoFile::from_bytes(&bytes)
                                                                .unwrap(),
-                                                           &client_id,
+                                                           btclient.get_id(),
                                                            6882)?;
-                                    // .unwrap();
-                                    peer_connections(result.0, &result.1, &client_id)?;
+                                    peer_connections(result.0, &result.1, btclient.get_id())?;
 
                                 }
                                 Err(e) => error!("{:?}", e),

@@ -381,7 +381,7 @@ help/h                           - show this help");
                                                            btclient.get_id(),
                                                            6882)?;
                                     peer_connections(result.0, &result.1, btclient.get_id())?;
-                                    btclient.add(torrent_name.to_string(), torrent);
+                                    btclient.add(torrent_name.to_string(), torrent)?;
                                 }
                                 Err(e) => error!("{:?}", e),
                             }
@@ -392,14 +392,14 @@ help/h                           - show this help");
                             error!("usage: remove <torrent number>");
                         } else {
                             let id = line[1].parse::<u32>().unwrap();
-                            btclient.remove(id);
+                            btclient.remove(id)?;
                         }
                     }
                     "list" | "l" => {
                         if line.len() != 1 {
                             error!("usage: list");
                         } else {
-                            let t_list = btclient.list().unwrap();
+                            let t_list = btclient.list();
                             println!("ID  Torrent");
                             println!("--  ----------------------------------------------");
                             for t in t_list {

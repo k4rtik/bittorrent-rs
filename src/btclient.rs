@@ -35,13 +35,8 @@ impl BTClient {
         Ok(self.torrents.len())
     }
 
-    pub fn list(self: &BTClient) -> Result<Vec<(u32, String)>> {
-        let mut t_list = Vec::new();
-        for t in &self.torrents {
-            let res = (t.0.clone(), t.1.name.clone());
-            t_list.push(res);
-        }
-        Ok(t_list)
+    pub fn list(self: &BTClient) -> Vec<(u32, String)> {
+        self.torrents.iter().map(|(id, torrent)| (*id, torrent.name.clone())).collect()
     }
 
     pub fn get_id(self: &BTClient) -> String {

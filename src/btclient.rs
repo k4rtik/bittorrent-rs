@@ -1,17 +1,26 @@
 use bip_metainfo::MetainfoFile;
 use errors::*;
+use futures::sync::mpsc::{self, Sender, Receiver};
+use tokio_core::io::{read, write_all};
+use tokio_core::net::TcpStream;
+use tokio_core::reactor::Core;
 
 use std::collections::HashMap;
 use std::io::Read;
 use std::fs;
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
 
 pub struct BTClient {
-    torrents: HashMap<usize, Torrent>,
+    torrents: HashMap<usize, Arc<RwLock<Torrent>>>,
     id: String, // peer_id or client id
     next_id: usize,
     channels: HashMap<usize, Sender<Message>>,
+}
+
+fn torrent_loop(rx: Receiver<Message>, torrent: Arc<RwLock<Torrent>>) {
+    let mut core = Core::new().unwrap();
 }
 
 impl BTClient {
@@ -27,13 +36,16 @@ impl BTClient {
         }
     }
 
-    pub fn add(self: &mut BTClient, file: fs::File) -> Result<usize> {
-        let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
-        let torrent = Torrent::new(file);
+    pub fn add(self: &mut BTClient, file: fs::File) -> Result<()> {
+        let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel(1);
+        let torrent = Arc::new(RwLock::new(Torrent::new(file)));
+        let t_clone = torrent.clone();
         self.torrents.insert(self.next_id, torrent);
         self.channels.insert(self.next_id, tx);
         self.next_id += 1;
-        Ok(self.next_id)
+
+        thread::spawn(move || torrent_loop(rx, t_clone));
+        Ok(())
     }
 
     pub fn remove(self: &mut BTClient, id: usize) -> Result<usize> {
@@ -45,6 +57,7 @@ impl BTClient {
         self.torrents
             .iter()
             .map(|(id, torrent)| {
+                let torrent = &(*(torrent.read().unwrap()));
                 let root_name: String;
                 if let Some(dir) = torrent.metainfo
                     .info()
@@ -114,12 +127,6 @@ impl Torrent {
             num_leachers: 0,
         }
     }
-}
-
-pub struct FileT {
-    pub path: String, // can be file or directory name
-    pub length: usize,
-    pub md5: Option<String>, // optional, try not to use
 }
 
 pub struct Peer {

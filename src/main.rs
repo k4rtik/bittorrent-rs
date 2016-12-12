@@ -32,7 +32,7 @@ mod errors {
 use bip_bencode::Bencode;
 use bip_metainfo::MetainfoFile;
 use bip_utracker::contact::CompactPeersV4;
-use btclient::BTClient;
+use btclient::*;
 use chrono::{TimeZone, UTC};
 use errors::*;
 use hyper::Client;
@@ -40,13 +40,12 @@ use hyper::header::Connection;
 use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
 use pnet::packet::Packet;
 use rustyline::completion::FilenameCompleter;
-use rustyline::{Config, CompletionType, Editor};
 use rustyline::error::ReadlineError;
+use rustyline::{Config, CompletionType, Editor};
 use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
 use url::Url;
-use btclient::{Torrent, FileT};
 
 use std::fs::File;
 use std::io::prelude::*;

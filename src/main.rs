@@ -46,7 +46,7 @@ use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::{Core, Timeout};
 use url::Url;
-use btclient::Torrent;
+use btclient::{Torrent, FileT};
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -76,7 +76,7 @@ fn print_files(bytes: &[u8]) -> Result<()> {
 }
 
 /// Print general information about the torrent.
-fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
+fn print_metainfo_overview(bytes: &[u8]) -> Result<Torrent> {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
     let info = metainfo.info();
     let info_hash_hex = metainfo.info_hash()
@@ -88,6 +88,10 @@ fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
             acc
         });
     let utc_creation_date = metainfo.creation_date().map(|c| UTC.timestamp(c, 0));
+
+    let mut torrent = Torrent::new(Url::parse(metainfo.main_tracker().unwrap()).unwrap(),
+                                   info.piece_length() as usize,
+                                   Vec::new());
 
     println!("------Metainfo File Overview-----");
 
@@ -105,7 +109,17 @@ fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
              info.files().fold(0, |acc, nex| acc + nex.length()));
 
     print_files(bytes)?;
-    Ok(())
+    let mut files = Vec::new();
+    for file in info.files() {
+        let fl = FileT {
+            length: file.length() as usize,
+            path: file.paths().next().unwrap_or("<unknown>").to_string(),
+            md5: None,
+        };
+        files.push(fl);
+    }
+    torrent.files = Some(files);
+    Ok(torrent)
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
@@ -186,8 +200,8 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: String
                     // debug!("Communicating with peer {:?}", peer_ip_port_cl);
                     // debug!("Starting thread timer...");
                     if let Ok((_, buf, amt)) =
-                        l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
-                            .chain_err(|| "didn't receive handshake response from peer") {
+                           l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                        .chain_err(|| "didn't receive handshake response from peer") {
                         if buf[0] == 19 &&
                            String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
                            amt == 68 {

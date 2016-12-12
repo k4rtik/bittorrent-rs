@@ -46,23 +46,23 @@ impl BTClient {
 
 pub struct Torrent {
     // MetaInfo
-    announce: Url,
-    piece_length: usize,
-    pieces_sha1: Vec<ShaHash>,
-    name: String, // can be file or directory name
-    length: Option<usize>,
-    md5: Option<String>, // optional, try not to use
-    files: Option<File>,
+    pub announce: Url,
+    pub piece_length: usize,
+    pub pieces_sha1: Vec<ShaHash>,
+    pub name: String, // can be file or directory name
+    pub length: Option<usize>,
+    pub md5: Option<String>, // optional, try not to use
+    pub files: Option<Vec<FileT>>,
 
     // From/For tracker
-    peers: Vec<Peer>,
-    uploaded: usize,
-    downloaded: usize,
-    left: usize,
-    interval: usize, // in seconds
-    tracker_id: String,
-    num_seeders: usize,
-    num_leachers: usize,
+    pub peers: Vec<Peer>,
+    pub uploaded: usize,
+    pub downloaded: usize,
+    pub left: usize,
+    pub interval: usize, // in seconds
+    pub tracker_id: String,
+    pub num_seeders: usize,
+    pub num_leachers: usize,
 }
 
 impl Torrent {
@@ -88,13 +88,13 @@ impl Torrent {
     }
 }
 
-struct File {
-    path: String, // can be file or directory name
-    length: usize,
-    md5: Option<String>, // optional, try not to use
+pub struct FileT {
+    pub path: String, // can be file or directory name
+    pub length: usize,
+    pub md5: Option<String>, // optional, try not to use
 }
 
-struct Peer {
+pub struct Peer {
     id: String, // peer_id
     ip_port: String,
 
@@ -105,7 +105,7 @@ struct Peer {
 }
 
 impl Peer {
-    fn new(id: String, ip_port: String) -> Peer {
+    pub fn new(id: String, ip_port: String) -> Peer {
         Peer {
             id: id,
             ip_port: ip_port,

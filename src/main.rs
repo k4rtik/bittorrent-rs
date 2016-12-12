@@ -290,7 +290,7 @@ fn main() {
     pretty_env_logger::init();
 
     // See: https://brson.github.io/2016/11/30/starting-with-error-chain for explanation
-    if let Err(ref e) = run() {
+    if let Err(ref e) = cli_run() {
         println!("error: {}", e);
 
         for e in e.iter().skip(1) {
@@ -305,7 +305,8 @@ fn main() {
     }
 }
 
-fn run() -> Result<()> {
+#[allow(cyclomatic_complexity)]
+fn cli_run() -> Result<()> {
     let mut btclient = BTClient::new();
 
     let config = Config::builder()

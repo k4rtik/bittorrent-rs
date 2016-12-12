@@ -334,7 +334,9 @@ parse/p <torrent file path>      - show Metainfo File Overview
 add/a <torrent file path>        - add a new torrent file for tracking
 remove/r <torrent id>            - remove given torrent from tracking list
 list/l                           - list torrents being tracked
-showfiles/sf <torrent file path> - show files in the torrent
+showfiles/sf <torrent id>        - show files in the torrent
+download/d <torrent id>          - download this torrent
+seed/s <torrent id>              - seed this torrent
 help/h                           - show this help");
                     }
                     "parse" | "p" => {
@@ -385,17 +387,16 @@ help/h                           - show this help");
                     }
                     "showfiles" | "sf" => {
                         if line.len() != 2 {
-                            error!("usage: showfiles <torrent file>");
+                            error!("usage: showfiles <torrent id>");
                         } else {
-                            let path = line[1];
-                            match File::open(path) {
-                                Ok(mut f) => {
-                                    let mut bytes: Vec<u8> = Vec::new();
-                                    f.read_to_end(&mut bytes).unwrap();
-                                    print_files(&bytes)?;
-                                }
-                                Err(e) => error!("{:?}", e),
-                            }
+                            // TODO call a btclient fn
+                        }
+                    }
+                    "download" | "d" => {
+                        if line.len() != 2 {
+                            error!("usage: download <torrent id>");
+                        } else {
+
                         }
                     }
                     "" => {}

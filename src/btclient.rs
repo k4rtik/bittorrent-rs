@@ -45,15 +45,22 @@ impl BTClient {
         self.torrents
             .iter()
             .map(|(id, torrent)| {
-                let root_name = torrent.metainfo
+                let root_name: String;
+                if let Some(dir) = torrent.metainfo
                     .info()
-                    .files()
-                    .next()
-                    .unwrap()
-                    .paths()
-                    .next()
-                    .unwrap()
-                    .to_owned();
+                    .directory() {
+                    root_name = dir.to_owned();
+                } else {
+                    root_name = torrent.metainfo
+                        .info()
+                        .files()
+                        .next()
+                        .unwrap()
+                        .paths()
+                        .next()
+                        .unwrap()
+                        .to_owned();
+                }
                 (*id, root_name)
             })
             .collect()

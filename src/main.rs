@@ -44,7 +44,7 @@ use rustyline::{Config, CompletionType, Editor};
 use rustyline::error::ReadlineError;
 use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
-use tokio_core::reactor::{Core, Timeout};
+use tokio_core::reactor::Core;
 use url::Url;
 use btclient::{Torrent, FileT};
 
@@ -76,7 +76,7 @@ fn print_files(bytes: &[u8]) -> Result<()> {
 }
 
 /// Print general information about the torrent.
-fn print_metainfo_overview(bytes: &[u8]) -> Result<Torrent> {
+fn print_metainfo_overview(bytes: &[u8]) -> Result<()> {
     let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
     let info = metainfo.info();
     let info_hash_hex = metainfo.info_hash()
@@ -88,10 +88,6 @@ fn print_metainfo_overview(bytes: &[u8]) -> Result<Torrent> {
             acc
         });
     let utc_creation_date = metainfo.creation_date().map(|c| UTC.timestamp(c, 0));
-
-    let mut torrent = Torrent::new(Url::parse(metainfo.main_tracker().unwrap()).unwrap(),
-                                   info.piece_length() as usize,
-                                   Vec::new());
 
     println!("------Metainfo File Overview-----");
 
@@ -109,17 +105,7 @@ fn print_metainfo_overview(bytes: &[u8]) -> Result<Torrent> {
              info.files().fold(0, |acc, nex| acc + nex.length()));
 
     print_files(bytes)?;
-    let mut files = Vec::new();
-    for file in info.files() {
-        let fl = FileT {
-            length: file.length() as usize,
-            path: file.paths().next().unwrap_or("<unknown>").to_string(),
-            md5: None,
-        };
-        files.push(fl);
-    }
-    torrent.files = Some(files);
-    Ok(torrent)
+    Ok(())
 }
 
 fn connect_to_tracker(metainfo: MetainfoFile,
@@ -200,8 +186,8 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: String
                     // debug!("Communicating with peer {:?}", peer_ip_port_cl);
                     // debug!("Starting thread timer...");
                     if let Ok((_, buf, amt)) =
-                           l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
-                        .chain_err(|| "didn't receive handshake response from peer") {
+                        l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                            .chain_err(|| "didn't receive handshake response from peer") {
                         if buf[0] == 19 &&
                            String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
                            amt == 68 {
@@ -371,41 +357,17 @@ help/h                           - show this help");
                     "add" | "a" => {
                         if line.len() != 2 {
                             error!("usage: add <torrent file>");
+                        } else if let Ok(file) = File::open(line[1]) {
+                            btclient.add(file)?;
                         } else {
-                            let path = line[1];
-                            match File::open(path) {
-                                Ok(mut f) => {
-                                    let mut bytes: Vec<u8> = Vec::new();
-                                    f.read_to_end(&mut bytes).unwrap();
-                                    // TODO
-                                    // create Torrent (parse metainfo file into our struct)
-                                    // call BTClient->add()
-                                    let t_file = MetainfoFile::from_bytes(&bytes).unwrap();
-                                    let torrent_name = path.split('/').collect::<Vec<&str>>().pop().unwrap().split(".torrent").collect::<Vec<&str>>()[0];
-                                    debug!("Torrent file {:?}", torrent_name);
-                                    let torrent =
-                                        Torrent::new(Url::parse(t_file.main_tracker()
-                                                             .unwrap())
-                                                         .unwrap(),
-                                                     t_file.info().piece_length() as usize,
-                                                     Vec::new());
-                                    let result =
-                                        connect_to_tracker(MetainfoFile::from_bytes(&bytes)
-                                                               .unwrap(),
-                                                           btclient.get_id(),
-                                                           6882)?;
-                                    peer_connections(result.0, &result.1, btclient.get_id())?;
-                                    btclient.add(torrent_name.to_string(), torrent)?;
-                                }
-                                Err(e) => error!("{:?}", e),
-                            }
+                            error!("Unable to open file, are you sure it exists?");
                         }
                     }
                     "remove" | "r" => {
                         if line.len() != 2 {
                             error!("usage: remove <torrent number>");
                         } else {
-                            let id = line[1].parse::<u32>().unwrap();
+                            let id = line[1].parse::<usize>().unwrap();
                             btclient.remove(id)?;
                         }
                     }

@@ -1,14 +1,17 @@
-use bip_util::sha::ShaHash;
+use bip_metainfo::MetainfoFile;
 use errors::*;
-use url::Url;
 
 use std::collections::HashMap;
+use std::io::Read;
+use std::fs;
+use std::sync::mpsc::{self, Sender, Receiver};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct BTClient {
-    torrents: HashMap<u32, Torrent>,
+    torrents: HashMap<usize, Torrent>,
     id: String, // peer_id or client id
-    torr_count: u32,
+    next_id: usize,
+    channels: HashMap<usize, Sender<Message>>,
 }
 
 impl BTClient {
@@ -19,24 +22,41 @@ impl BTClient {
         BTClient {
             torrents: HashMap::new(),
             id: client_id,
-            torr_count: 0,
+            next_id: 0,
+            channels: HashMap::new(),
         }
     }
 
-    pub fn add(self: &mut BTClient, torrent_name: String, mut torrent: Torrent) -> Result<usize> {
-        self.torr_count += 1;
-        torrent.name = torrent_name;
-        self.torrents.insert(self.torr_count, torrent);
-        Ok(self.torrents.len())
+    pub fn add(self: &mut BTClient, file: fs::File) -> Result<usize> {
+        let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
+        let torrent = Torrent::new(file);
+        self.torrents.insert(self.next_id, torrent);
+        self.channels.insert(self.next_id, tx);
+        self.next_id += 1;
+        Ok(self.next_id)
     }
 
-    pub fn remove(self: &mut BTClient, id: u32) -> Result<usize> {
+    pub fn remove(self: &mut BTClient, id: usize) -> Result<usize> {
         self.torrents.remove(&id);
         Ok(self.torrents.len())
     }
 
-    pub fn list(self: &BTClient) -> Vec<(u32, String)> {
-        self.torrents.iter().map(|(id, torrent)| (*id, torrent.name.clone())).collect()
+    pub fn list(self: &BTClient) -> Vec<(usize, String)> {
+        self.torrents
+            .iter()
+            .map(|(id, torrent)| {
+                let root_name = torrent.metainfo
+                    .info()
+                    .files()
+                    .next()
+                    .unwrap()
+                    .paths()
+                    .next()
+                    .unwrap()
+                    .to_owned();
+                (*id, root_name)
+            })
+            .collect()
     }
 
     pub fn get_id(self: &BTClient) -> String {
@@ -45,14 +65,7 @@ impl BTClient {
 }
 
 pub struct Torrent {
-    // MetaInfo
-    pub announce: Url,
-    pub piece_length: usize,
-    pub pieces_sha1: Vec<ShaHash>,
-    pub name: String, // can be file or directory name
-    pub length: Option<usize>,
-    pub md5: Option<String>, // optional, try not to use
-    pub files: Option<Vec<FileT>>,
+    metainfo: MetainfoFile,
 
     // From/For tracker
     pub peers: Vec<Peer>,
@@ -65,16 +78,24 @@ pub struct Torrent {
     pub num_leachers: usize,
 }
 
+pub enum Message {
+    StartDownload,
+    StartSeed,
+    StopDownload,
+    StopSeed,
+    Exit,
+}
+
 impl Torrent {
-    pub fn new(url: Url, plen: usize, pieces: Vec<ShaHash>) -> Torrent {
+    pub fn new(mut tfile: fs::File) -> Torrent {
+        // parse metainfo file
+        let mut bytes: Vec<u8> = Vec::new();
+        tfile.read_to_end(&mut bytes).unwrap();
+
+        let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
+
         Torrent {
-            announce: url,
-            piece_length: plen,
-            pieces_sha1: pieces,
-            name: String::new(),
-            length: None,
-            md5: None,
-            files: None,
+            metainfo: metainfo,
 
             peers: Vec::new(),
             uploaded: 0,

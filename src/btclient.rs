@@ -18,8 +18,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::thread;
 use std::str;
 use std::string::String;
+use std::net::SocketAddr;
 
 use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
+use pnet::packet::Packet;
+
+const PEER_HANDSHAKE_STRUCT_SZ: usize = 68;
+const PEER_REQ_PKT_SZ: usize = 14;
 
 pub struct BTClient {
     torrents: HashMap<usize, Arc<RwLock<Torrent>>>,
@@ -198,6 +203,93 @@ impl Torrent {
             ip_ports.push(peer.to_string());
         }
         Ok((ip_ports, info_hash_str.to_string()))
+    }
+
+    fn peer_connections(self: Torrent, peer_ip_ports: Vec<String>, peer_id: String) -> Result<()> {
+        let info_hash = self.metainfo.info_hash();
+        // TODO figure can this conversion to url-encoded form be done safely?
+        let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
+        for ip_port in peer_ip_ports {
+            let peer_ip_port = ip_port.clone();
+            let info_hash_clone = info_hash_str.to_string().clone();
+            let peer_id_clone = peer_id.clone();
+            thread::spawn(move || {
+                fn run(pip: String, ih: String, pid: String) -> Result<()> {
+                    let mut l = Core::new().unwrap();
+                    // TODO setup timeout before handshake
+                    // let dur = Duration::from_secs(100);
+                    // let timeout = Timeout::new(dur, &l.handle()).unwrap();
+
+                    if let Ok(client) = self.handshake_peer(&mut l, pip, ih, pid) {
+                        // debug!("Communicating with peer {:?}", peer_ip_port_cl);
+                        // debug!("Starting thread timer...");
+                        if let Ok((_, buf, amt)) =
+                               l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                            .chain_err(|| "didn't receive handshake response from peer") {
+                            if buf[0] == 19 &&
+                               String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
+                               amt == 68 {
+                                info!("handshake successful!");
+                            } else {
+                                info!("not a useful peer")
+                            }
+                        } else {
+                            bail!("");
+                        }
+                    } else {
+                        bail!("");
+                    }
+                    Ok(())
+                }
+                if let Err(ref e) = run(peer_ip_port, info_hash_clone, peer_id_clone) {
+                    println!("error: {}", e);
+
+                    for e in e.iter().skip(1) {
+                        println!("caused by: {}", e);
+                    }
+
+                    if let Some(backtrace) = e.backtrace() {
+                        println!("backtrace: {:?}", backtrace);
+                    }
+                }
+
+                // TODO determine the below three parameters logically
+                // let index = 0;
+                // let begin = 0;
+                // let length = 10;
+                // match request_piece(&stream, index, begin, length) {
+                //     Ok(buf_read) => {
+                //         trace!("buf_read: {:?}", buf_read);
+                //     }
+                //     Err(_) => error!("Requesting piece failed!"),
+                // }
+                // send_keep_alive(&stream);
+            });
+        }
+        Ok(())
+    }
+
+    fn handshake_peer(self: Torrent,
+                      core: &mut Core,
+                      peer_ip_port: String,
+                      peer_id: String)
+                      -> Result<TcpStream> {
+        let info_hash = self.metainfo.info_hash();
+        // TODO figure can this conversion to url-encoded form be done safely?
+        let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
+        let mut buf = vec![0u8; PEER_HANDSHAKE_STRUCT_SZ];
+        let mut ph = MutablePeerHandshakePacket::new(&mut buf).unwrap();
+        ph.set_pstrlen("BitTorrent protocol".len() as u8);
+        ph.set_pstr(&String::from("BitTorrent protocol").into_bytes());
+        ph.set_reserved(&[0; 8]);
+        ph.set_info_hash(info_hash_str.as_bytes());
+        ph.set_peer_id(peer_id.as_bytes());
+        let handle = core.handle();
+        let client = TcpStream::connect(&peer_ip_port.parse::<SocketAddr>().unwrap(), &handle);
+        let client = core.run(client).unwrap();
+        let (client, _) = core.run(write_all(client, ph.packet())).unwrap();
+        trace!("{:?}", client);
+        Ok(client)
     }
 }
 

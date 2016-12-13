@@ -185,8 +185,8 @@ fn peer_connections(peer_ip_ports: Vec<String>, info_hash: &str, peer_id: String
                     // debug!("Communicating with peer {:?}", peer_ip_port_cl);
                     // debug!("Starting thread timer...");
                     if let Ok((_, buf, amt)) =
-                        l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
-                            .chain_err(|| "didn't receive handshake response from peer") {
+                           l.run(read(client, vec![0; PEER_HANDSHAKE_STRUCT_SZ]))
+                        .chain_err(|| "didn't receive handshake response from peer") {
                         if buf[0] == 19 &&
                            String::from_utf8_lossy(&buf[1..20]) == "BitTorrent protocol" &&
                            amt == 68 {

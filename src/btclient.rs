@@ -1,9 +1,14 @@
 use bip_metainfo::MetainfoFile;
+use bip_bencode::Bencode;
+use bip_utracker::contact::CompactPeersV4;
 use errors::*;
 use futures::sync::mpsc::{self, Sender, Receiver};
+use hyper::Client;
+use hyper::header::Connection;
 use tokio_core::io::{read, write_all};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
+use url::Url;
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -11,6 +16,10 @@ use std::fs;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::thread;
+use std::str;
+use std::string::String;
+
+use packet::peer_pkt::{MutablePeerHandshakePacket, MutablePeerMessagePacket};
 
 pub struct BTClient {
     torrents: HashMap<usize, Arc<RwLock<Torrent>>>,
@@ -96,6 +105,7 @@ pub struct Torrent {
     pub tracker_id: String,
     pub num_seeders: usize,
     pub num_leachers: usize,
+    pub bitmap: Vec<u8>,
 }
 
 pub enum Message {
@@ -113,7 +123,7 @@ impl Torrent {
         tfile.read_to_end(&mut bytes).unwrap();
 
         let metainfo = MetainfoFile::from_bytes(bytes).unwrap();
-
+        let pieces = metainfo.info().pieces().count();
         Torrent {
             metainfo: metainfo,
 
@@ -125,7 +135,69 @@ impl Torrent {
             tracker_id: String::new(),
             num_seeders: 0,
             num_leachers: 0,
+            bitmap: vec![0; pieces],
         }
+    }
+    fn send_bitmap(self: Torrent, mut stream: &TcpStream) -> Result<()> {
+        let mut buf = vec![0u8; self.bitmap.len()+2];
+        let mut bitmap_pkt = MutablePeerMessagePacket::new(&mut buf).unwrap();
+        bitmap_pkt.set_len((self.bitmap.len() + 1) as u32);
+        bitmap_pkt.set_id(5);
+        bitmap_pkt.set_payload(&self.bitmap);
+        Ok(())
+    }
+
+    fn connect_to_tracker(self: Torrent,
+                          peer_id: String,
+                          port: u16)
+                          -> Result<(Vec<String>, String)> {
+        debug!("connecting to tracker: {:?}", self.metainfo.main_tracker());
+
+        let info_hash = self.metainfo.info_hash();
+        // TODO figure can this conversion to url-encoded form be done safely?
+        let info_hash_str = unsafe { str::from_utf8_unchecked(info_hash.as_ref()) };
+
+        // TODO this needs to be calculated based on what we have
+        let total_len = self.metainfo.info().files().fold(0, |acc, nex| acc + nex.length());
+
+        let mut url = Url::parse(self.metainfo.main_tracker().unwrap()).unwrap();
+        url.query_pairs_mut()
+		.append_pair("info_hash", info_hash_str)	
+		.append_pair("peer_id", &peer_id)
+	        .append_pair("port", &(port.to_string()))
+		 // TODO parametrize this
+		.append_pair("uploaded", "0")
+		// TODO parametrize this
+		.append_pair("downloaded", "0")
+		// TODO see note on total_len above
+		.append_pair("left", &(total_len.to_string()))
+		.append_pair("compact", "1")
+		.append_pair("event", "started")
+		.append_pair("supportcrypto", "0");
+        trace!("URL {:?}", url);
+
+        let client = Client::new();
+        let mut res = client.get(url).header(Connection::close()).send().unwrap();
+        let mut buffer = Vec::new();
+        res.read_to_end(&mut buffer).unwrap();
+        debug!("{:?}", res);
+        let bencode = Bencode::decode(&buffer).unwrap();
+        trace!("{:?}", bencode);
+        let (_, peers) = CompactPeersV4::from_bytes(bencode.dict()
+                .unwrap()
+                .lookup("peers")
+                .unwrap()
+                .bytes()
+                .unwrap())
+            .unwrap();
+        trace!("{:?}", peers);
+        let mut ip_ports: Vec<String> = Vec::new();
+        debug!("Peer list received:");
+        for peer in peers.iter() {
+            debug!("{:?}", peer);
+            ip_ports.push(peer.to_string());
+        }
+        Ok((ip_ports, info_hash_str.to_string()))
     }
 }
 
